@@ -95,7 +95,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   const $=id=>view.getElementById(id),text=(id,value)=>{if($(id).textContent!==value)$(id).textContent=value;};
   let value=null,rangeMode='30d',year=null,anchorMonth=null,customFrom=null,customTo=null,selectedDate=null,disabledModels=new Set(),lastKey='',chartDataSig='',busy=false,opener=null;
   let disposed=false,refreshMotion=null,refreshDelay=null,finishRefresh=null,refreshPending=false,syncSpinning=false,spinStarted=0,accountKey=null,tipTarget=null,tipModel=null,actionTipTarget=null;
-  let progVisual=0,progTarget=0,progActive=false,progCompleting=false,progHoldTimer=null,progRaf=null,progLastTs=0;
+  let progVisual=0,progTarget=0,progActive=false,progCompleting=false,progKnown=false,progDone=0,progTotal=0,progHoldTimer=null,progRaf=null,progLastTs=0;
   let updateState={state:'idle'},updateBusy=false,updateTimer=null;
   const zh=()=>language.language==='zh-CN'||language.language==='zh-TW',tw=()=>language.language==='zh-TW',w=(cn,en,twText)=>(tw()&&twText!==undefined)?twText:(zh()?cn:en);
   const EFFORT_PAREN_RE=/\s*\((?:x?high|medium|med|low|minimal|none|thinking|adaptive|reasoning|fast|default)\)\s*$/i;
@@ -685,7 +685,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   }
   function finishProgressBar(){
     cancelProgressTimers();
-    progActive=false;progCompleting=false;progVisual=0;progTarget=0;
+    progActive=false;progCompleting=false;progKnown=false;progDone=0;progTotal=0;progVisual=0;progTarget=0;
     const wrap=$('sync-prog-wrap');
     if(wrap){wrap.hidden=true;wrap.style.opacity='';}
     paintProgress(0);
@@ -707,9 +707,14 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
         return;
       }
     }else{
-      if(progTarget<0.78){
-        const ceiling=0.78;
-        progTarget=Math.min(ceiling,progTarget+(ceiling-progTarget)*dt*1.35);
+      if(progKnown&&progTotal>0){
+        const realRatio=Math.min(0.95,Math.max(0,progDone/progTotal));
+        const sliceCeil=Math.min(0.92,Math.max(realRatio+0.03,(progDone+0.88)/progTotal*0.92));
+        if(progTarget<sliceCeil)progTarget=Math.min(sliceCeil,progTarget+(sliceCeil-progTarget)*dt*1.15);
+        else if(progTarget<0.94)progTarget=Math.min(0.94,progTarget+(0.94-progTarget)*dt*0.08);
+      }else{
+        if(progTarget<0.32)progTarget=Math.min(0.32,progTarget+(0.32-progTarget)*dt*1.25);
+        else if(progTarget<0.90)progTarget=Math.min(0.90,progTarget+(0.90-progTarget)*dt*0.22);
       }
       progVisual+=(progTarget-progVisual)*Math.min(1,dt*12);
     }
@@ -722,12 +727,16 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
       clearTimeout(progHoldTimer);progHoldTimer=null;
       wrap.hidden=false;wrap.style.opacity='1';
       const known=progress&&Number.isFinite(progress.total)&&progress.total>0&&Number.isFinite(progress.done)&&progress.done>=0;
-      const realRatio=known?Math.min(0.97,Math.max(0,progress.done/progress.total)):0;
+      const realRatio=known?Math.min(0.95,Math.max(0,progress.done/progress.total)):0;
       if(!progActive||progCompleting){
-        progActive=true;progCompleting=false;
-        progVisual=0.04;progTarget=Math.max(0.12,realRatio);progLastTs=0;
-      }else{
+        progActive=true;progCompleting=false;progKnown=false;progDone=0;progTotal=0;
+        progVisual=known?Math.max(0.04,realRatio):0.04;progTarget=progVisual;progLastTs=0;
+      }
+      if(known){
+        progKnown=true;progDone=progress.done;progTotal=progress.total;
         progTarget=Math.max(progTarget,realRatio);
+      }else{
+        progKnown=false;
       }
       if(typeof requestAnimationFrame==='function'){
         if(progRaf===null){progLastTs=0;progRaf=requestAnimationFrame(tickProgress);}
@@ -772,15 +781,14 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   }
   $('refresh').addEventListener('click',async()=>{
     if(busy||disposed)return;refreshPending=true;syncRefreshSpin();
-    if(value&&dialog.open){syncProgressBar(true,value.syncProgress);text('timezone',w('导入数据中…','Importing data…','匯入資料中…'));}
+    if(value&&dialog.open){syncProgressBar(true,value.syncProgress);}
     try{await onRefresh();}
     catch{if(!disposed){text('alert',w('暂时无法刷新，请稍后重试','Refresh unavailable. Try again shortly.','暫時無法重新整理，請稍後重試'));$('alert').hidden=false;}}
     finally{
       refreshPending=false;syncRefreshSpin();
-      if(!disposed&&value){
+      if(!disposed&&dialog.open&&value){
         const stillSync=Boolean(value.syncMode||(value.syncing&&value.summaryStale!==true));
         syncProgressBar(stillSync,value.syncProgress);
-        if(!stillSync)text('timezone',w('本机存储','Local only','本機儲存'));
       }
     }
   });
@@ -796,7 +804,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   function conceal(){
     if(dialog.matches(':popover-open'))dialog.hidePopover();dialog.removeAttribute('open');
   }
-  function close(){languagePicker.close(false);stopUpdatePoll();closeMenus();conceal();$('tip').hidden=true;hideActionTip();opener?.focus({preventScroll:true});}
+  function close(){languagePicker.close(false);stopUpdatePoll();closeMenus();finishProgressBar();syncSpinning=false;clearTimeout(refreshDelay);refreshDelay=null;finishRefresh=null;refreshMotion?.cancel();refreshMotion=null;if(!refreshPending){busy=false;$('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false');}conceal();$('tip').hidden=true;hideActionTip();opener?.focus({preventScroll:true});}
   $('close').addEventListener('click',close);dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close();}});
   const contentKey=data=>JSON.stringify([{...data,updatedAt:undefined},language.language,themeSignature()]);
   const within=event=>event.composedPath().includes(dialog);
@@ -839,7 +847,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   // theme change, rather than waiting for the next metrics poll.
   const themeObserver=new MutationObserver(()=>{if(!disposed&&value&&dialog.open){const key=contentKey(value);if(key!==lastKey){lastKey=key;render();}}});
   if(root.host)themeObserver.observe(root.host,{attributes:true,attributeFilter:['data-pulse-theme','style']});
-  return {open(data,trigger,nextUpdate){if(nextUpdate!==undefined)updateState=nextUpdate;if(!data||disposed)return;accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();},
+  return {open(data,trigger,nextUpdate){if(nextUpdate!==undefined)updateState=nextUpdate;if(!data||disposed)return;finishProgressBar();accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();},
     update(data,nextUpdate){if(disposed)return;if(nextUpdate!==undefined){updateState=nextUpdate;renderUpdate();}if(!data){if(!value)return;value=null;lastKey='';if(dialog.open)render();return;}if(accountKey&&accountKey!==data.accountKey){selectedDate=null;disabledModels.clear();year=data.today.slice(0,4);anchorMonth=data.today.slice(0,7);const d30=add(data.today,-29);customFrom=data.firstDate&&d30<data.firstDate?data.firstDate:d30;customTo=data.today;}accountKey=data.accountKey;value=normalizeUsage(data);if(!dialog.open)return;const key=contentKey(data);if(key===lastKey)return;lastKey=key;render();},
     restoreModal(){if(!disposed&&dialog.open&&dialog.isConnected&&!dialog.matches(':popover-open')){closeMenus();present();}},
     close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();cancelProgressTimers();languagePicker.dispose();themeObserver.disconnect();clearTimeout(refreshDelay);finishRefresh?.();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};

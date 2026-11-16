@@ -1295,24 +1295,42 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('alert').hidden, false);
     assert.equal(idMap.get('alert').textContent, '部分记录暂不可读取，用量可能不完整');
 
-    // High-FPS rAF completion sweeps all the way to scaleX(1) (100%) before hiding
+    // High-FPS rAF completion sweeps all the way to scaleX(1) (100%) before hiding,
+    // proportional step creeping stays smooth without stalling at 78%,
+    // and closing mid-sync clears animation so reopening later never replays old progress.
     const rafQueue = [];
     const prevRaf = globalThis.requestAnimationFrame, prevCancelRaf = globalThis.cancelAnimationFrame;
     globalThis.requestAnimationFrame = fn => { rafQueue.push(fn); return rafQueue.length; };
     globalThis.cancelAnimationFrame = () => {};
     try {
-      dash.update({ ...usageData, syncing: true, syncMode: 'incremental', syncProgress: null });
-      assert.equal(idMap.get('sync-prog-wrap').hidden, false);
-      if (rafQueue.length) rafQueue.shift()(16);
+      dash.update({ ...usageData, syncing: true, syncMode: 'incremental', syncProgress: { done: 1, total: 10 } });
+      let ts = 16;
+      for (let i = 0; i < 60 && rafQueue.length; i++, ts += 16) rafQueue.shift()(ts);
+      const midVal = Number(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'));
+      assert.ok(midVal >= 10 && midVal < 30, `expected proportional in-slice progress for 1/10, got ${midVal}`);
       dash.update({ ...usageData, syncing: false, syncMode: null, syncProgress: null });
-      let ts = 32;
-      while (rafQueue.length && ts < 2000) { rafQueue.shift()(ts); ts += 16; }
+      while (rafQueue.length && ts < 4000) { rafQueue.shift()(ts); ts += 16; }
       assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(1)');
       assert.equal(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'), '100');
+
+      // Mid-sync close + reopen after completion must not replay leftover progress
+      dash.update({ ...usageData, syncing: true, syncMode: 'incremental', syncProgress: { done: 2, total: 4 } });
+      if (rafQueue.length) rafQueue.shift()(ts + 16);
+      assert.equal(idMap.get('sync-prog-wrap').hidden, false);
+      dash.close();
+      assert.equal(idMap.get('sync-prog-wrap').hidden, true);
+      assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0)');
+      rafQueue.length = 0;
+      dash.open({ ...usageData, syncing: false, syncMode: null, syncProgress: null }, null, { state: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' });
+      assert.equal(idMap.get('sync-prog-wrap').hidden, true);
+      assert.equal(rafQueue.length, 0, 'reopening idle dashboard after close must not resume stale rAF progress');
     } finally {
       globalThis.requestAnimationFrame = prevRaf;
       globalThis.cancelAnimationFrame = prevCancelRaf;
     }
+
+    idMap.get('refresh').dispatch('click');
+    await new Promise(r => setImmediate(r));
 
     dash.update({ ...usageData, syncing: false, confirmedMissingConversations: 1 });
     assert.equal(idMap.get('alert').hidden, false);
