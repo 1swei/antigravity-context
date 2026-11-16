@@ -24,7 +24,7 @@ export function platformPaths({ platform = process.platform, home = homedir(), e
     profile, log, logCandidates:env.AG_PULSE_LOG?[log]:[...new Set([log,profileLog,...(platform==='win32'?[join(home,'.gemini','antigravity','logs','language_server.log')]:[])])],
     settings,
     pluginConfig: join(home, '.gemini', 'config', 'config.json'),
-    data: env.ANTIGRAVITY_EXECUTABLE_DATA_DIR || join(home, '.gemini', 'antigravity', 'sidecar_data', 'antigravity-pulse', 'panel', 'data'),
+    data: env.ANTIGRAVITY_EXECUTABLE_DATA_DIR || join(home, '.gemini', 'antigravity', 'sidecar_data', 'antigravity-context', 'panel', 'data'),
   };
 }
 

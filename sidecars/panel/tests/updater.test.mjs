@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {AppUpdater,runUpdateWorker,releaseRuntimeDirectory} from '../updater.mjs';
 import {EventEmitter} from 'node:events';
 
-async function setup(t,run){const directory=await mkdtemp(join(tmpdir(),'ag-updater-'));t.after(()=>rm(directory,{recursive:true,force:true}));await writeFile(join(directory,'plugin.json'),JSON.stringify({name:'antigravity-pulse',version:'0.8.6'}));return {directory,service:new AppUpdater({pluginDir:directory,dataDir:directory,run})};}
+async function setup(t,run){const directory=await mkdtemp(join(tmpdir(),'ag-updater-'));t.after(()=>rm(directory,{recursive:true,force:true}));await writeFile(join(directory,'plugin.json'),JSON.stringify({name:'antigravity-context',version:'0.8.6'}));return {directory,service:new AppUpdater({pluginDir:directory,dataDir:directory,run})};}
 
 test('updater is manual, coalesces checks and exposes no package URLs',async t=>{
  let calls=0,now=100;const {service}=await setup(t,async()=>{calls++;return {host:'app',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true,url:'private-plan-url',notes:'release notes'};});service.now=()=>now;
@@ -20,7 +20,7 @@ test('same version has no apply action and an IDE response cannot become an App 
  service.lastCheck=0;service.run=async()=>({host:'ide',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true});assert.equal((await service.check()).error,'verification');assert.equal(service.plan,null);
 });
 test('verified installation requires exact target version before reporting success',async t=>{
- let service;const fixture=await setup(t,async(_worker,args)=>{if(args[0]==='check')return {host:'app',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true};await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-pulse',version:'0.8.7'}));return {version:'0.8.7',verified:true};});service=fixture.service;
+ let service;const fixture=await setup(t,async(_worker,args)=>{if(args[0]==='check')return {host:'app',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true};await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-context',version:'0.8.7'}));return {version:'0.8.7',verified:true};});service=fixture.service;
  await service.check();assert.equal((await service.apply('0.8.7')).state,'installing');await service.job;assert.equal(service.publicState().state,'installed');assert.equal(service.publicState().currentVersion,'0.8.7');
  assert.equal(JSON.parse(await readFile(join(fixture.directory,'plugin.json'))).version,'0.8.7');
 });
@@ -31,7 +31,7 @@ test('failed check/install reports static error codes and retains the installed 
 
 test('simultaneous apply clicks start one worker and check cannot replace installation state',async t=>{
  let installs=0,finish;const waiting=new Promise(r=>finish=r);
- const fixture=await setup(t,async(_worker,args)=>{if(args[0]==='check')return {host:'app',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true};installs++;await waiting;await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-pulse',version:'0.8.7'}));return {version:'0.8.7',verified:true};});
+ const fixture=await setup(t,async(_worker,args)=>{if(args[0]==='check')return {host:'app',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true};installs++;await waiting;await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-context',version:'0.8.7'}));return {version:'0.8.7',verified:true};});
  const {service}=fixture;await service.check();
  const results=await Promise.all([service.apply('0.8.7'),service.apply('0.8.7'),service.apply('0.8.7')]);
  assert.ok(results.every(r=>r.state==='installing'));assert.equal((await service.check()).state,'installing');
@@ -43,13 +43,13 @@ test('simultaneous apply clicks start one worker and check cannot replace instal
 test('expired or changed-install plans never start a download',async t=>{
  let calls=0,now=100;const {service,directory}=await setup(t,async()=>{calls++;return {host:'app',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true};});service.now=()=>now;
  await service.check();now+=15*60*1000+1;assert.equal((await service.apply('0.8.7')).errorDetail,'plan-expired');assert.equal(calls,1);
- await service.check();await writeFile(join(directory,'plugin.json'),JSON.stringify({name:'antigravity-pulse',version:'0.8.8'}));const state=await service.apply('0.8.7');assert.equal(state.errorDetail,'plan-expired');assert.equal(state.currentVersion,'0.8.8');assert.equal(calls,2);
+ await service.check();await writeFile(join(directory,'plugin.json'),JSON.stringify({name:'antigravity-context',version:'0.8.8'}));const state=await service.apply('0.8.7');assert.equal(state.errorDetail,'plan-expired');assert.equal(state.currentVersion,'0.8.8');assert.equal(calls,2);
 });
 
 test('missing installed manifest becomes a retryable static check error',async t=>{
  const {service,directory}=await setup(t,async()=>{throw Error('must not run');});await rm(join(directory,'plugin.json'));
  const state=await service.check();assert.equal(state.state,'error');assert.equal(state.error,'install');assert.equal(service.checkPending,null);
- await writeFile(join(directory,'plugin.json'),JSON.stringify({name:'antigravity-pulse',version:'0.8.6'}));
+ await writeFile(join(directory,'plugin.json'),JSON.stringify({name:'antigravity-context',version:'0.8.6'}));
  service.run=async()=>({host:'app',currentVersion:'0.8.6',latestVersion:'0.8.6',hasUpdate:false});assert.equal((await service.check()).state,'current');
 });
 
@@ -88,7 +88,7 @@ test('download progress reports measured bytes, drops extra fields and never reg
   assert.deepEqual(fixture.service.publicState().progress,{phase:'download',received:50,total:100});
   progressStarted();
   await waiting;options.onProgress({phase:'install'});
-  await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-pulse',version:'0.8.7'}));return {version:'0.8.7',verified:true};
+  await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-context',version:'0.8.7'}));return {version:'0.8.7',verified:true};
  });
  await fixture.service.check();await fixture.service.apply('0.8.7');await started;assert.equal(fixture.service.publicState().progress.received,50);
  finish();await fixture.service.job;assert.deepEqual(fixture.service.publicState().progress,{phase:'complete'});
@@ -110,7 +110,7 @@ test('stderr progress parsing tolerates chunks and ignores unbounded or unrelate
 });
 
 test('Windows relocates only cwd inside a replaced runtime tree',()=>{
- const root='C:\\Users\\Fixture\\plugins\\antigravity-pulse',changes=[];
+ const root='C:\\Users\\Fixture\\plugins\\antigravity-context',changes=[];
  for(const current of [root+'\\sidecars\\panel',root+'\\compat',root+'\\assets\\icons']){
   assert.equal(releaseRuntimeDirectory(root,{platform:'win32',cwd:()=>current,chdir:dir=>changes.push(dir)}),true);
  }
@@ -238,7 +238,7 @@ test('an uncertain outcome after committing never reruns installation and a fres
  let installed=false,applies=0;
  const fixture=await setup(t,async(_worker,args)=>{
   if(args[0]==='check')return {host:'app',currentVersion:installed?'0.8.7':'0.8.6',latestVersion:'0.8.7',hasUpdate:!installed};
-  applies++;await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-pulse',version:'0.8.7'}));installed=true;
+  applies++;await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-context',version:'0.8.7'}));installed=true;
   throw Error('install'); // A committed worker may exit without a valid result.
  });
  await fixture.service.check();await fixture.service.apply('0.8.7');await fixture.service.job;

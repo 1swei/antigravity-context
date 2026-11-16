@@ -17,7 +17,7 @@ module.exports = function installAgPulseIpc(electron, authorities) {
       if(!['127.0.0.1','localhost','[::1]'].includes(origin.hostname)||!['http:','https:'].includes(origin.protocol))throw new Error('Invalid preference origin');
       if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>key!=='language'))throw new Error('Invalid preference input');
       if(!preferenceStore){
-        const file=path.join(os.homedir(),'.gemini','config','plugins','antigravity-pulse','compat','preferences.mjs');
+        const file=path.join(os.homedir(),'.gemini','config','plugins','antigravity-context','compat','preferences.mjs');
         preferenceStore=import(require('node:url').pathToFileURL(file).href).then(({PreferencesStore})=>new PreferencesStore());
       }
       const store=await preferenceStore;
@@ -29,7 +29,7 @@ module.exports = function installAgPulseIpc(electron, authorities) {
       const origin=new URL(event.senderFrame?.url||event.sender.getURL());
       if(!['127.0.0.1','localhost','[::1]'].includes(origin.hostname))return;
       if(!['boot','mounted','mount-error'].includes(state.stage))return;
-      const dir=path.join(os.homedir(),'.gemini','antigravity','sidecar_data','antigravity-pulse','panel','logs');
+      const dir=path.join(os.homedir(),'.gemini','antigravity','sidecar_data','antigravity-context','panel','logs');
       fs.mkdirSync(dir,{recursive:true});
       const safe={stage:state.stage,hostFound:state.hostFound===true,editorFound:state.editorFound===true,composerFound:state.composerFound===true};
       fs.appendFileSync(path.join(dir,'widget.log'),`${new Date().toISOString()} ${JSON.stringify(safe)}\n`);
@@ -41,17 +41,17 @@ module.exports = function installAgPulseIpc(electron, authorities) {
     if (!['127.0.0.1','localhost','[::1]'].includes(origin.hostname) || !['http:','https:'].includes(origin.protocol)) return offline('仅允许 Antigravity 本地界面');
     for(const [file,disabled] of [
       [path.join(local,'AntigravityPulse','settings.json'),s=>s.enabled===false],
-      [path.join(os.homedir(),'.gemini','config','config.json'),s=>s.plugins?.['antigravity-pulse']?.enabled===false],
+      [path.join(os.homedir(),'.gemini','config','config.json'),s=>s.plugins?.['antigravity-context']?.enabled===false],
     ]) {
       try {if(disabled(JSON.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''))))return {...offline('Antigravity Context 已停用'),enabled:false};}catch{}
     }
     if (input.conversationId && !GUID.test(input.conversationId)) return offline('会话标识无效');
-    let endpoint = [...authorities].find(([key])=>key.startsWith('antigravity-pulse--panel-'))?.[1];
+    let endpoint = [...authorities].find(([key])=>key.startsWith('antigravity-context--panel-'))?.[1];
     if (!endpoint) {
       // The native UI feature may be hidden, but the installed plugin process
       // still runs. Its own SDK log announces the loopback port.
       try {
-        const file=path.join(os.homedir(),'.gemini','antigravity','sidecar_data','antigravity-pulse','panel','logs','sidecar.log');
+        const file=path.join(os.homedir(),'.gemini','antigravity','sidecar_data','antigravity-context','panel','logs','sidecar.log');
         const log=fs.readFileSync(file,'utf8').slice(-262144);
         const port=[...log.matchAll(/\[sidecar\] listening on 127\.0\.0\.1:(\d+)/g)].at(-1)?.[1];
         if(port)endpoint=`http://127.0.0.1:${port}/`;

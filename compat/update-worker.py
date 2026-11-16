@@ -414,14 +414,14 @@ def stage_archive(archive, stage, expected_version):
             with bundle.open(entry) as incoming, target.open('wb') as outgoing:
                 shutil.copyfileobj(incoming, outgoing, length=65536)
     manifest = json.loads((stage / 'plugin.json').read_text(encoding='utf-8-sig'))
-    if manifest.get('name') != 'antigravity-pulse' or manifest.get('version') != expected_version:
+    if manifest.get('name') != 'antigravity-context' or manifest.get('version') != expected_version:
         raise ValueError('Package manifest mismatch')
     if not all((stage / name).is_file() for name in REQUIRED):
         raise ValueError('Incomplete App runtime')
 
 
 def validate_location(target, home=None):
-    expected = (home or Path.home()) / '.gemini/config/plugins/antigravity-pulse'
+    expected = (home or Path.home()) / '.gemini/config/plugins/antigravity-context'
     # User-owned ancestors such as .gemini may be relocated. Node also resolves
     # imported module filenames to their physical paths. Accept either spelling,
     # but reject a linked plugin root even when supplied through its real alias.
@@ -436,7 +436,7 @@ def validate_location(target, home=None):
 def validate_target(target, home=None):
     target = validate_location(target, home)
     manifest = json.loads((target / 'plugin.json').read_text(encoding='utf-8-sig'))
-    if manifest.get('name') != 'antigravity-pulse':
+    if manifest.get('name') != 'antigravity-context':
         raise ValueError('Wrong installed plugin identity')
     version(manifest.get('version'))
     for name in RUNTIME:
@@ -770,12 +770,12 @@ def perform(plan, target, updates, progress=None):
     if linked(updates):
         raise LocationError('Linked update directory is unsupported')
     updates = updates.resolve()
-    working = target.parent / '.antigravity-pulse-update-transaction'
+    working = target.parent / '.antigravity-context-update-transaction'
     if updates.is_relative_to(target):
         # Older SDKs keep data inside sidecars/panel/data. Backing up the runtime
         # into that directory recursively copies the backup into itself. Keep
         # only backups beside the installed plugin; private data stays in place.
-        updates = target.parent / '.antigravity-pulse-update-backups'
+        updates = target.parent / '.antigravity-context-update-backups'
         if linked(updates):
             raise LocationError('Linked backup root is unsupported')
     if overlaps(updates, working) or target.is_relative_to(updates):
@@ -851,7 +851,7 @@ def main():
         # user-owned ancestors may be links; runtime/transaction roots may not.
         args.target = validate_location(args.target)
         with lifecycle_lock(args.target):
-            working = args.target.parent / '.antigravity-pulse-update-transaction'
+            working = args.target.parent / '.antigravity-context-update-transaction'
             if linked(working):
                 raise LocationError('Linked recovery transaction is unsupported')
             recovered = False

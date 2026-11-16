@@ -1,12 +1,16 @@
 # Antigravity Context 变更日志
 
-- **插件标识**：`antigravity-pulse`（展示名：`Antigravity Context`）
+**简体中文** · [English](CHANGELOG.en.md)
+
+- **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
 - **当前版本**：`1.0.0`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
 - **更新时间**：`2026-11-16`
 
 ---
 
 ## v1.0.0（`2026-11-16`）
+
+- **统一插件标识为 `antigravity-context`**：`plugin.json`、`sidecars/panel/package.json`、`main.mjs`、`history.mjs`、`compat/platform.mjs`、`compat/ipc-host.cjs`、`compat/update-worker.py`、`updater.mjs` 与相关测试全部统一使用 `antigravity-context`，支持直接克隆至 `~/.gemini/config/plugins/antigravity-context`。
 
 - **移除右侧辅助栏看板**：`sidecars/panel/sidecar.json` 设为 `has_web_ui: false` 并移除 `ui_config`；删除右侧看板前端文件（`index.html`、`styles.css`、`app.js`、`panel-source.mjs`、`toolbar-preview.html`、`sdk.mjs` 及对应单测），并更新 [main.mjs](sidecars/panel/main.mjs) 以无头 Sidecar 模式运行内联状态栏注入与用量采集。
 - **品牌与版本规范化**：展示名称调整为 **Antigravity Context**，版本号统一升至 `1.0.0`（[plugin.json](plugin.json)、[sidecars/panel/package.json](sidecars/panel/package.json)），重绘上下文环形与脉冲主题矢量图标 [logo.svg](assets/logo.svg)。

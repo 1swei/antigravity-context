@@ -15,7 +15,7 @@ def linked(path):
 
 @contextmanager
 def lifecycle_lock(target):
-    path = Path(target).parent / '.antigravity-pulse-update.lock'
+    path = Path(target).parent / '.antigravity-context-update.lock'
     path.parent.mkdir(parents=True, exist_ok=True)
     if linked(path):
         raise ValueError('Linked lifecycle lock is unsupported')

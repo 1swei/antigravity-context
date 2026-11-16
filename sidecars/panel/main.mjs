@@ -52,7 +52,7 @@ const runtimeSettings = () => {
   if(Date.now()-settingsAt<1000)return settingsCache;
   let settings = {};
   try { settings = JSON.parse(readFileSync(paths.settings,'utf8').replace(/^\uFEFF/,'')); } catch {}
-  try { if (JSON.parse(readFileSync(paths.pluginConfig,'utf8').replace(/^\uFEFF/,'')).plugins?.['antigravity-pulse']?.enabled === false) settings.enabled = false; } catch {}
+  try { if (JSON.parse(readFileSync(paths.pluginConfig,'utf8').replace(/^\uFEFF/,'')).plugins?.['antigravity-context']?.enabled === false) settings.enabled = false; } catch {}
   settingsCache=settings;settingsAt=Date.now();return settings;
 };
 const integration = new RuntimeUi({

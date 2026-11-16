@@ -133,7 +133,7 @@ export function reconcileMetrics(saved, fresh, savedAt = null) {
 
 export class SessionHistory {
   pending = new Map();
-  constructor(directory = join(process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR || join(homedir(),'.gemini','antigravity','sidecar_data','antigravity-pulse','panel','data'),'history-v1'), {io={}}={}) {
+  constructor(directory = join(process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR || join(homedir(),'.gemini','antigravity','sidecar_data','antigravity-context','panel','data'),'history-v1'), {io={}}={}) {
     this.directory = directory;this.io={readFile,mkdir,writeFile,rename,unlink,...io};
   }
   file(scope, id) {

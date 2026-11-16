@@ -1,5 +1,5 @@
 {
-  "name": "antigravity-pulse",
+  "name": "antigravity-context",
   "display_name": "Antigravity Context",
   "description": "Inline context window breakdown, token throughput, cache hit rate and usage analytics on Windows, Linux and macOS. English / Chinese switching.",
   "version": "1.0.0",

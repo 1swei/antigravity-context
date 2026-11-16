@@ -51,16 +51,16 @@
 
 ## 安装方式
 
-将本仓库克隆到 Antigravity 的插件目录（目录名请保持为 `antigravity-pulse`，以匹配 `plugin.json` 中的插件标识与本地数据存储路径）：
+将本仓库直接克隆到 Antigravity 的插件目录（目录名统一为 `antigravity-context`）：
 
 ```bash
-git clone https://github.com/1swei/antigravity-context.git ~/.gemini/config/plugins/antigravity-pulse
+git clone https://github.com/1swei/antigravity-context.git ~/.gemini/config/plugins/antigravity-context
 ```
 
 Windows PowerShell：
 
 ```powershell
-git clone https://github.com/1swei/antigravity-context.git "$env:USERPROFILE\.gemini\config\plugins\antigravity-pulse"
+git clone https://github.com/1swei/antigravity-context.git "$env:USERPROFILE\.gemini\config\plugins\antigravity-context"
 ```
 
 克隆完成后，在 Antigravity 插件管理中启用 **Antigravity Context**（或重新加载窗口）即可生效。
@@ -91,4 +91,4 @@ node --test sidecars/panel/tests/custom-ui.test.mjs sidecars/panel/tests/runtime
 - 重构用量统计弹窗为单页统一日期筛选（`7d` / `30d` / `月` / `年` / `自定义`）并打通热力图与明细联动。
 - 适配 Antigravity 宿主浅色/深色 CSS 变量与字体，重构插件展示名称（**Antigravity Context**）与矢量图标。
 
-本项目采用 [MIT License](LICENSE) 开源，完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+本项目采用 [MIT License](LICENSE) 开源，完整变更记录见 [更新日志 (中文)](CHANGELOG.md) · [Changelog (English)](CHANGELOG.en.md)。

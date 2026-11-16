@@ -51,16 +51,16 @@ Click "View usage stats" to open the standalone analytics modal featuring unifie
 
 ## Installation
 
-Clone this repository into your Antigravity plugins directory (keep the folder name as `antigravity-pulse` so it matches `plugin.json` and local sidecar storage paths):
+Clone this repository directly into your Antigravity plugins directory (`antigravity-context`):
 
 ```bash
-git clone https://github.com/1swei/antigravity-context.git ~/.gemini/config/plugins/antigravity-pulse
+git clone https://github.com/1swei/antigravity-context.git ~/.gemini/config/plugins/antigravity-context
 ```
 
 On Windows PowerShell:
 
 ```powershell
-git clone https://github.com/1swei/antigravity-context.git "$env:USERPROFILE\.gemini\config\plugins\antigravity-pulse"
+git clone https://github.com/1swei/antigravity-context.git "$env:USERPROFILE\.gemini\config\plugins\antigravity-context"
 ```
 
 Then enable **Antigravity Context** in Antigravity's Plugin Manager (or reload the window).
@@ -91,4 +91,4 @@ This project is a derivative fork based on the MIT-licensed `antigrative-dashboa
 - Consolidated the Token usage modal onto a single page with unified date filters (`7d`, `30d`, `month`, `year`, `custom`) and cross-linked heatmap/chart drilldown.
 - Adapted inline widget and modal themes dynamically to host Antigravity light/dark CSS variables and fonts, and updated branding to **Antigravity Context** with a redesigned vector icon.
 
-Licensed under the [MIT License](LICENSE). See [CHANGELOG.md](CHANGELOG.md) for details.
+Licensed under the [MIT License](LICENSE). See [Changelog (English)](CHANGELOG.en.md) · [更新日志 (中文)](CHANGELOG.md) for details.
