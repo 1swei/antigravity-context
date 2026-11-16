@@ -8,33 +8,54 @@
 
 轻量、本地优先的 Antigravity 插件：在对话输入框内直接展示实时上下文占用、分段构成、生成速度、缓存命中率，并提供交互式 Token 用量统计弹窗。
 
-[MIT License](LICENSE) · 版本 `v1.0.3` · [更新日志](CHANGELOG.md)
+[MIT License](LICENSE) · 版本 `v1.0.4` · [更新日志](CHANGELOG.md)
 
 </div>
 
 ---
 
-## 界面预览
+## 界面预览（浅色 / 深色主题）
 
 ### 1. 输入框内联状态栏
-直接在对话输入框底部嵌入紧凑指标条，实时展示 **轮次/步数、生成速度（tok/s）、会话 Token 与缓存命中率、上下文占用环形进度**：
+直接在对话输入框底部嵌入紧凑指标条，实时展示 **生成速度（tok/s）、会话 Token 与缓存命中率、上下文占用环形进度**：
 
-![输入框内联状态栏](assets/screenshot-inline-bar.png)
+**浅色主题 (Light)**
+![输入框内联状态栏（浅色）](assets/screenshot-inline-bar-light.png)
+
+**深色主题 (Dark)**
+![输入框内联状态栏（深色）](assets/screenshot-inline-bar-dark.png)
 
 ### 2. 上下文占比与分段构成拆解
 悬停或点击上下文百分比，即可查看当前窗口总容量及分段估算（**系统提示词、工具调用、对话消息、宿主开销与未记录**）：
 
-![上下文分段构成拆解](assets/screenshot-context-breakdown.png)
+**浅色主题 (Light)**
+![上下文分段构成拆解（浅色）](assets/screenshot-context-breakdown-light.png)
+
+**深色主题 (Dark)**
+![上下文分段构成拆解（深色）](assets/screenshot-context-breakdown-dark.png)
 
 ### 3. Token 与缓存明细浮层
-悬停或点击 Token 指标条，查看本次会话缓存命中率、未缓存输入、缓存读取、输出及 **今日 / 本月用量**：
+悬停或点击 Token 指标条，查看本次会话缓存命中率、未缓存输入、缓存读取、输出及 **今日 / 本月用量**（有新版本时入口旁同步显示红点提醒）：
 
-![Token 与缓存明细浮层](assets/screenshot-token-popover.png)
+**浅色主题 (Light)**
+![Token 与缓存明细浮层（浅色）](assets/screenshot-token-popover-light.png)
+
+**深色主题 (Dark)**
+![Token 与缓存明细浮层（深色）](assets/screenshot-token-popover-dark.png)
 
 ### 4. 用量统计弹窗（年度热力图 + 模型明细）
 点击「查看用量统计」打开独立统计弹窗，支持 **近7天 / 近30天 / 按月 / 按年 / 自定义区间** 统一筛选，并与年度贡献热力图、堆叠柱状图和模型明细表双向联动下钻：
 
-![用量统计弹窗](assets/screenshot-usage-modal.png)
+| 浅色主题 (Light) | 深色主题 (Dark) |
+| --- | --- |
+| ![用量统计弹窗（浅色）](assets/screenshot-usage-modal-light.png) | ![用量统计弹窗（深色）](assets/screenshot-usage-modal-dark.png) |
+
+### 5. 在线检查更新与安装弹窗
+点击右上角检查更新按钮（有新版本时显示红点），自动向 GitHub 校验最新版本、展示发布说明并支持一键在线校验安装与重载：
+
+| 浅色主题 (Light) | 深色主题 (Dark) |
+| --- | --- |
+| ![在线更新弹窗（浅色）](assets/screenshot-update-popover-light.png) | ![在线更新弹窗（深色）](assets/screenshot-update-popover-dark.png) |
 
 ---
 

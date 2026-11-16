@@ -3,8 +3,16 @@
 **简体中文** · [English](CHANGELOG.en.md)
 
 - **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
-- **当前版本**：`1.0.3`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
+- **当前版本**：`1.0.4`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
 - **更新时间**：`2026-11-16`
+
+---
+
+## v1.0.4（`2026-11-16`）
+
+- **点击更新按钮强制实时检查最新**：展开右上角更新弹窗时（即使此前已检测到旧版更新），自动向 GitHub 重新拉取最新版本号，避免显示过期缓存版本。
+- **更新完成后自动清理历史备份**：在校验新版本安装提交成功后，除了自动删除下载的 `.zip` 与暂存事务目录外，同步清理 `updates/backup-*` 历史备份目录，避免占用磁盘空间。
+- **补充全页面亮色 / 深色主题截图**：更新 [README.md](README.md) 与 [README.en.md](README.en.md)，覆盖内联状态栏、上下文拆解、Token 明细、用量统计弹窗与更新弹窗的明暗双主题实机预览。
 
 ---
 

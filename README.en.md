@@ -8,33 +8,54 @@
 
 A lightweight, local-first Antigravity plugin that injects an inline context window & telemetry bar into the chat composer and provides an interactive Token usage analytics modal.
 
-[MIT License](LICENSE) · Version `v1.0.3` · [Changelog](CHANGELOG.en.md)
+[MIT License](LICENSE) · Version `v1.0.4` · [Changelog](CHANGELOG.en.md)
 
 </div>
 
 ---
 
-## Screenshots
+## Screenshots (Light & Dark Themes)
 
 ### 1. Inline Composer Status Bar
-Embedded directly inside the chat composer footer to display **turns/steps, generation speed (`tok/s`), session tokens & cache hit rate, and the context ring indicator**:
+Embedded directly inside the chat composer footer to display **generation speed (`tok/s`), session tokens & cache hit rate, and the context ring indicator**:
 
-![Inline Composer Status Bar](assets/screenshot-inline-bar.png)
+**Light Theme**
+![Inline Composer Status Bar (Light)](assets/screenshot-inline-bar-light.png)
+
+**Dark Theme**
+![Inline Composer Status Bar (Dark)](assets/screenshot-inline-bar-dark.png)
 
 ### 2. Context Window Breakdown Popover
 Hover or click the context indicator to inspect active window capacity and token breakdown (**System prompt, Tool calls, Messages, Host overhead & other**):
 
-![Context Window Breakdown Popover](assets/screenshot-context-breakdown.png)
+**Light Theme**
+![Context Window Breakdown Popover (Light)](assets/screenshot-context-breakdown-light.png)
+
+**Dark Theme**
+![Context Window Breakdown Popover (Dark)](assets/screenshot-context-breakdown-dark.png)
 
 ### 3. Token & Cache Details Popover
-Hover or click the token chip to inspect cache hit rate, uncached input, cache read, output tokens, and **Today / This month** totals:
+Hover or click the token chip to inspect cache hit rate, uncached input, cache read, output tokens, and **Today / This month** totals (displays a red notification dot when an update is ready):
 
-![Token & Cache Details Popover](assets/screenshot-token-popover.png)
+**Light Theme**
+![Token & Cache Details Popover (Light)](assets/screenshot-token-popover-light.png)
+
+**Dark Theme**
+![Token & Cache Details Popover (Dark)](assets/screenshot-token-popover-dark.png)
 
 ### 4. Usage Analytics Modal (Activity Heatmap & Model Breakdown)
 Click "View usage stats" to open the standalone analytics modal featuring unified date filters (**7d / 30d / Month / Year / Custom**) cross-linked with the yearly contribution heatmap, stacked bar chart, and model breakdown table:
 
-![Usage Analytics Modal](assets/screenshot-usage-modal.png)
+| Light Theme | Dark Theme |
+| --- | --- |
+| ![Usage Analytics Modal (Light)](assets/screenshot-usage-modal-light.png) | ![Usage Analytics Modal (Dark)](assets/screenshot-usage-modal-dark.png) |
+
+### 5. Online Update Check & Install Popover
+Click the top-right update button (with a red notification dot when an update is available) to fetch the latest GitHub release, preview clean release notes, and install with SHA-256 verification:
+
+| Light Theme | Dark Theme |
+| --- | --- |
+| ![Online Update Popover (Light)](assets/screenshot-update-popover-light.png) | ![Online Update Popover (Dark)](assets/screenshot-update-popover-dark.png) |
 
 ---
 

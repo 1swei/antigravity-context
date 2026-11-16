@@ -259,3 +259,10 @@ test('silent background check preserves idle and available states on transient f
  const stillAvailable=await service.check({silent:true});
  assert.equal(stillAvailable.state,'available');
 });
+
+test('manual check request refreshes even when a newer update was already cached',async t=>{
+ let latest='0.8.7';const {service}=await setup(t,async()=>({host:'app',currentVersion:'0.8.6',latestVersion:latest,hasUpdate:true}));
+ await service.check();assert.equal(service.publicState().latestVersion,'0.8.7');
+ latest='0.8.8';await service.request({action:'check'});await service.checkPending;
+ assert.equal(service.publicState().latestVersion,'0.8.8');
+});

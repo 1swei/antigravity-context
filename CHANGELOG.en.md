@@ -3,8 +3,16 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.3` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.4` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-16`
+
+---
+
+## v1.0.4 (`2026-11-16`)
+
+- **Always Re-Check Latest on Opening Update Popover**: Clicking the top-right update button now triggers a fresh GitHub check even when an older update notice was already cached.
+- **Automatic Cleanup of Update Backups**: After a committed installation succeeds, `compat/update-worker.py` now automatically removes `updates/backup-*` directories in addition to the downloaded zip and staging transaction directory.
+- **Light & Dark Theme Screenshots**: Added crisp Light and Dark mode screenshots across all 5 views (inline bar, context breakdown, token popover, usage modal, and update popover) in [README.md](README.md) and [README.en.md](README.en.md).
 
 ---
 

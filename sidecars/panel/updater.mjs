@@ -92,9 +92,9 @@ export class AppUpdater{
  state={state:'idle',host:'app',currentVersion:null};plan=null;checkPending=null;applyPending=null;job=null;lastCheck=0;
  publicState(){const {state,host,currentVersion,latestVersion,notes,error,errorDetail,progress}=this.state;return {state,host,currentVersion,latestVersion,notes,error,errorDetail,progress};}
  async current(){const m=JSON.parse(await readFile(join(this.pluginDir,'plugin.json'),'utf8'));if(m.name!=='antigravity-context'||!/^\d+\.\d+\.\d+$/.test(m.version))throw Error('verification');return m.version;}
- async check({silent=false}={}){
+ async check({silent=false,force=false}={}){
   if(this.job||this.applyPending||['installed','reloading'].includes(this.state.state))return this.publicState();if(this.checkPending)return this.checkPending;
-  if(this.lastCheck&&this.now()-this.lastCheck<15000&&['current','available'].includes(this.state.state))return this.publicState();
+  if(!force&&this.lastCheck&&this.now()-this.lastCheck<15000&&['current','available'].includes(this.state.state))return this.publicState();
   const prior=this.state;
   this.checkPending=(async()=>{
    if(!silent)this.state={state:'checking',host:'app',currentVersion:prior.currentVersion??null,progress:{phase:'check'}};
@@ -152,7 +152,7 @@ export class AppUpdater{
  }
  async request(input){
   if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['action','version'].includes(k)))throw Error('verification');
-  if(input.action==='check'&&input.version===undefined){void this.check().catch(()=>{});return this.publicState();}
+  if(input.action==='check'&&input.version===undefined){void this.check({force:true}).catch(()=>{});return this.publicState();}
   if(input.action==='status'&&input.version===undefined)return this.publicState();
   if(input.action==='apply'&&typeof input.version==='string')return this.apply(input.version);
   if(input.action==='reload'&&input.version===undefined&&this.state.state==='reloading')return this.publicState();

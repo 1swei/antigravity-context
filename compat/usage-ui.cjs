@@ -614,7 +614,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   $('update-btn').addEventListener('click',()=>{
     if(updateMenu.isOpen()){updateMenu.close();return;}
     updateMenu.open();renderUpdate();
-    if(['idle','current','error'].includes(updateState?.state||'idle'))void sendUpdate({action:'check'});
+    if(['idle','current','available','error'].includes(updateState?.state||'idle'))void sendUpdate({action:'check'});
   });
   $('upd-action').addEventListener('click',()=>{
     if(updateBusy||disposed)return;

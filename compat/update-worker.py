@@ -835,6 +835,9 @@ def perform(plan, target, updates, progress=None):
             recover_transaction(working, target)
             raise
         recover_transaction(working, target)  # Committed: clean staging only.
+        for item in updates.iterdir():
+            if item.is_dir() and item.name.startswith('backup-') and not linked(item):
+                shutil.rmtree(item, ignore_errors=True)
         report('complete')
         return result
 

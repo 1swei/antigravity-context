@@ -1230,9 +1230,9 @@ test('usage-ui header update button shows red dot on available update and suppor
       onRefresh: async () => {},
       onUpdate: async input => {
         calls.push(input);
-        if (input.action === 'apply') return { state: 'installed', currentVersion: '1.0.1', latestVersion: '1.0.1' };
-        if (input.action === 'reload') return { state: 'reloading', currentVersion: '1.0.1', latestVersion: '1.0.1' };
-        return { state: 'available', currentVersion: '1.0.0', latestVersion: '1.0.1', notes: 'Bug fixes' };
+        if (input.action === 'apply') return { state: 'installed', currentVersion: '1.0.2', latestVersion: '1.0.2' };
+        if (input.action === 'reload') return { state: 'reloading', currentVersion: '1.0.2', latestVersion: '1.0.2' };
+        return { state: 'available', currentVersion: '1.0.0', latestVersion: '1.0.2', notes: '## v1.0.2\n- **更新**：新增主题提醒\n**Full Changelog**: https://example.com' };
       },
     });
     const usageData = { today: '2026-11-16', firstDate: '2026-11-16', timeZone: 'Asia/Shanghai', requests: 1, models: [], days: [] };
@@ -1270,16 +1270,20 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('upd-notes').textContent, '• 更新：精简界面');
     assert.equal(idMap.get('upd-feedback').textContent, '');
     assert.equal(idMap.get('upd-action').textContent, '立即更新');
+    await new Promise(r => setImmediate(r));
+    assert.deepEqual(calls[0], { action: 'check' });
+    assert.equal(idMap.get('upd-lat').textContent, 'v1.0.2');
+    assert.equal(idMap.get('upd-notes').textContent, '• 更新：新增主题提醒');
 
     idMap.get('upd-action').dispatch('click');
     await new Promise(r => setImmediate(r));
-    assert.deepEqual(calls[0], { action: 'apply', version: '1.0.1' });
+    assert.deepEqual(calls[1], { action: 'apply', version: '1.0.2' });
     assert.equal(idMap.get('upd-action').textContent, '重新加载插件');
     assert.equal(idMap.get('update-dot').hidden, false);
 
     idMap.get('upd-action').dispatch('click');
     await new Promise(r => setImmediate(r));
-    assert.deepEqual(calls[1], { action: 'reload' });
+    assert.deepEqual(calls[2], { action: 'reload' });
     dash.dispose();
   } finally {
     globalThis.document = prevDoc;
