@@ -3,20 +3,26 @@ import {budgetError,collectionFailure} from './collection-state.mjs';
 // Cached immutable prefixes are local numeric/structural projections only.
 const settled=s=>/IDLE|DONE|COMPLETED|CANCELLED|CANCELED|STOPPED|FAILED|ERROR/.test(String(s||''));
 const unavailable=()=>new Error('后台已重新连接，请等待刷新');
+const MISSING_SUMMARY_COOLDOWN_MS=500;
 export class TrajectoryReader {
  // Serialized statistics budget, not transcript/response size. Local resource
  // experiments cover 1K/8K/32K records; 8 MiB bounds retained objects well below
  // the 32K-record case (~100 MiB extra heap). See docs/LONG_CONVERSATIONS.md.
  constructor(client,{budgetBytes=8*1024*1024,idleRecheckMs=10000,maxSummaryEntries=4096,maxPages=4096}={}){this.client=client;this.budgetBytes=budgetBytes;this.idleRecheckMs=idleRecheckMs;this.maxSummaryEntries=maxSummaryEntries;this.maxPages=maxPages;}
  failures=new Map();
- entries=new Map();epoch=0;endpoint=null;summaries=null;summaryAt=-Infinity;summaryPending=null;cachedBytes=0;
- reset(){this.epoch++;this.entries.clear();this.failures.clear();this.summaries=null;this.summaryAt=-Infinity;this.summaryPending=null;this.cachedBytes=0;}
+ entries=new Map();epoch=0;endpoint=null;summaries=null;summaryAt=-Infinity;missingSummaryAt=-Infinity;summaryPending=null;cachedBytes=0;
+ reset(){this.epoch++;this.entries.clear();this.failures.clear();this.summaries=null;this.summaryAt=-Infinity;this.missingSummaryAt=-Infinity;this.summaryPending=null;this.cachedBytes=0;}
  trim(keep){for(const [key,e]of this.entries){if(this.cachedBytes<=this.budgetBytes)break;if(key===keep||e.pending)continue;this.cachedBytes-=e.bytes;this.entries.delete(key);}}
  async summary(id,provided,force){
   if(provided)return provided;
-    if(force&&this.summaries&&this.client.now()-this.summaryAt<30000)force=false;
-   if(force||!this.summaries||this.client.now()-this.summaryAt>=1800){
-   if(!this.summaryPending){const epoch=this.epoch;
+  const now=this.client.now();
+  const missing=Boolean(this.summaries&&!Object.hasOwn(this.summaries,id));
+  const missingRefresh=missing&&now-this.missingSummaryAt>=MISSING_SUMMARY_COOLDOWN_MS;
+  if(force&&this.summaries&&!missingRefresh&&now-this.summaryAt<30000)force=false;
+  if(force||!this.summaries||missingRefresh||now-this.summaryAt>=1800){
+   if(!this.summaryPending){
+    if(missingRefresh)this.missingSummaryAt=now;
+    const epoch=this.epoch;
     const pending=this.client.call('GetAllCascadeTrajectories',{excludeSubtrajectories:false}).then(r=>{
      if(epoch!==this.epoch)throw unavailable();
      const all=r.trajectorySummaries||{},entries=Object.entries(all);
@@ -29,7 +35,7 @@ export class TrajectoryReader {
    }
    await this.summaryPending;
   }
-  const s=this.summaries[id];if(!s)throw new Error('会话暂时没有可用统计');return s;
+  const s=Object.hasOwn(this.summaries,id)?this.summaries[id]:null;if(!s)throw new Error('会话暂时没有可用统计');return s;
  }
  async read(id,{summary:provided,force=false,isCurrent=()=>true}={}){
   if(!isCurrent())throw unavailable();

@@ -104,3 +104,25 @@ test('reset during an in-flight read rejects late old records and permits a fres
  const pending=client.trajectory(id);await begun;client.resetTrajectories();release();await assert.rejects(pending,/重新连接/);assert.equal(client.reader.entries.size,0);
  assert.equal((await client.trajectory(id)).trajectory.steps.length,state.steps.length);
 });
+test('unseen conversation IDs bypass the 1800ms summary cache with a 500ms cooldown',async()=>{
+ let now=0;const client=new AntigravityClient({now:()=>now});
+ const newId='new-id',calls=[];let summaries={[id]:summary(1,'CASCADE_RUN_STATUS_RUNNING','v1')};
+ client.discover=async()=>({pid:42,port:1234,csrf:'fixture'});
+ client.call=async(method,body={})=>{
+  calls.push([method,body]);
+  if(method==='GetAllCascadeTrajectories')return {trajectorySummaries:summaries};
+  if(method==='GetCascadeTrajectorySteps')return {steps:body.stepOffset===0?[{type:'USER_INPUT'}]:[]};
+  return {generatorMetadata:[]};
+ };
+ await client.trajectory(id);assert.equal(calls.filter(([m])=>m==='GetAllCascadeTrajectories').length,1);
+ now=200;summaries={[id]:summary(1,'CASCADE_RUN_STATUS_RUNNING','v1'),[newId]:summary(1,'CASCADE_RUN_STATUS_RUNNING','v1')};
+ calls.length=0;const fresh=await client.trajectory(newId);
+ assert.equal(fresh.trajectory.cascadeId,newId);
+ assert.equal(calls.filter(([m])=>m==='GetAllCascadeTrajectories').length,1);
+ now=400;calls.length=0;await assert.rejects(client.trajectory('missing-id'),/暂无|没有可用统计/);
+ assert.equal(calls.filter(([m])=>m==='GetAllCascadeTrajectories').length,0);
+ now=700;calls.length=0;await assert.rejects(client.trajectory('missing-id'),/没有可用统计/);
+ assert.equal(calls.filter(([m])=>m==='GetAllCascadeTrajectories').length,1);
+ now=900;calls.length=0;await client.trajectory(id);
+ assert.equal(calls.filter(([m])=>m==='GetAllCascadeTrajectories').length,0);
+});
