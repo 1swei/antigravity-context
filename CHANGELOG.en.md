@@ -3,8 +3,16 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.5` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.6` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-16`
+
+---
+
+## v1.0.6 (`2026-11-16`)
+
+- **Usage Modal Header/Footer Cleanup & Version Pill**: Added a monospace current-version tag next to the usage modal title, removed redundant "Local Antigravity" and bottom-right storage/import status copy, unified the language toggle button to match the transparent toolbar style (highlighting only on hover/press/open), and moved initial dialog focus off the language button onto `.page` so its tooltip no longer pops up on open.
+- **Continuous Progress & Clean Reopen Reset**: Improved in-flight progress bar interpolation to advance smoothly per active item instead of stalling at a fixed `78%` ceiling, immediately engaged `250ms` polling when opening into an active sync, and reset progress animations/stale sync flags across `close()` and `open()` so reopening never replays completed progress.
+- **Instant Refresh Unlock & Synthetic Hover Suppression**: Removed the `600ms` post-sync turn-completion lock and decoupled the `250ms` inline press indicator delay from `onRefresh()` so `#refresh` unlocks immediately upon completion; suppressed Chromium synthetic `pointerleave`/`pointerenter` bursts across `disabled` transitions so stationary pointers neither re-trigger the "Refresh" tooltip nor keep a sticky hover fill until real movement.
 
 ---
 

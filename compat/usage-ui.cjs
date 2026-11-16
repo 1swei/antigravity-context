@@ -243,25 +243,22 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     if(target?.dataset)delete target.dataset.hoverMuted;
   }
   function clearMutedActions(){for(const t of [...mutedActions.keys()])unmuteActionTarget(t);}
-  view.addEventListener('pointermove',event=>{
+  function onMutedMove(event){
     if(!mutedActions.size||!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return;
-    const path=event.composedPath?.()||[];
     for(const [t,pos]of [...mutedActions.entries()]){
       const moved=!pos||Math.hypot(event.clientX-pos.x,event.clientY-pos.y)>=2;
-      const inside=path.includes(t);
+      const r=t.getBoundingClientRect?.();
+      const inside=Boolean(r&&event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom);
       if(!moved&&inside)continue;
-      if(!moved&&t.disabled){
-        const r=t.getBoundingClientRect?.();
-        if(r&&event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom)continue;
-      }
       unmuteActionTarget(t);
       if(inside&&!t.disabled)showActionTip(t);
     }
-  },{passive:true});
+  }
+  document.addEventListener('pointermove',onMutedMove,{passive:true});
   function bindActionTip(target){
     if(!target)return;
     target.addEventListener('pointerenter',()=>{if(!mutedActions.has(target))showActionTip(target);});
-    target.addEventListener('pointerleave',()=>{unmuteActionTarget(target);if(actionTipTarget===target)hideActionTip();});
+    target.addEventListener('pointerleave',()=>{if(!target.disabled)unmuteActionTarget(target);if(actionTipTarget===target)hideActionTip();});
     target.addEventListener('focus',()=>{if(target.matches?.(':focus-visible'))showActionTip(target);});
     target.addEventListener('blur',()=>{if(actionTipTarget===target)hideActionTip();});
     target.addEventListener('pointerdown',event=>muteActionTarget(target,event));
@@ -868,5 +865,5 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   return {open(data,trigger,nextUpdate){if(nextUpdate!==undefined)updateState=nextUpdate;if(!data||disposed)return;finishProgressBar();accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();},
     update(data,nextUpdate){if(disposed)return;if(nextUpdate!==undefined){updateState=nextUpdate;renderUpdate();}if(!data){if(!value)return;value=null;lastKey='';if(dialog.open)render();return;}if(accountKey&&accountKey!==data.accountKey){selectedDate=null;disabledModels.clear();year=data.today.slice(0,4);anchorMonth=data.today.slice(0,7);const d30=add(data.today,-29);customFrom=data.firstDate&&d30<data.firstDate?data.firstDate:d30;customTo=data.today;}accountKey=data.accountKey;value=normalizeUsage(data);if(!dialog.open)return;const key=contentKey(data);if(key===lastKey)return;lastKey=key;render();},
     restoreModal(){if(!disposed&&dialog.open&&dialog.isConnected&&!dialog.matches(':popover-open')){closeMenus();present();}},
-    close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();cancelProgressTimers();languagePicker.dispose();themeObserver.disconnect();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};
+    close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();cancelProgressTimers();languagePicker.dispose();themeObserver.disconnect();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);document.removeEventListener('pointermove',onMutedMove);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};
 };

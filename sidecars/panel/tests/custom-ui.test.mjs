@@ -1333,6 +1333,8 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('refresh').disabled, true);
     assert.equal(idMap.get('refresh').getAttribute('aria-busy'), 'true');
     assert.equal(idMap.get('refresh').dataset.hoverMuted, '1');
+    idMap.get('refresh').dispatch('pointerleave');
+    assert.equal(idMap.get('refresh').dataset.hoverMuted, '1', 'synthetic pointerleave emitted while button is disabled must not clear hoverMuted');
     await new Promise(r => setImmediate(r));
     assert.equal(idMap.get('refresh').disabled, false, 'refresh button must unlock immediately when refresh completes');
     assert.equal(idMap.get('refresh').getAttribute('aria-busy'), 'false');
