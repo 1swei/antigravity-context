@@ -1247,6 +1247,22 @@ test('usage-ui header update button shows red dot on available update and suppor
     });
     assert.equal(idMap.get('update-dot').hidden, false);
 
+    idMap.get('update-btn').dispatch('pointerenter');
+    assert.equal(idMap.get('action-tip').hidden, false);
+    assert.equal(idMap.get('action-tip').textContent, '发现新版本 · 点击查看更新');
+    assert.equal(idMap.get('update-btn').title, '');
+    assert.equal(idMap.get('locale').title, '');
+    assert.equal(idMap.get('refresh').title, '');
+    assert.equal(idMap.get('close').title, '');
+    idMap.get('update-btn').dispatch('pointerleave');
+    assert.equal(idMap.get('action-tip').hidden, true);
+
+    idMap.get('refresh').dispatch('pointerenter');
+    assert.equal(idMap.get('action-tip').hidden, false);
+    assert.equal(idMap.get('action-tip').textContent, '刷新');
+    idMap.get('refresh').dispatch('pointerleave');
+    assert.equal(idMap.get('action-tip').hidden, true);
+
     idMap.get('update-btn').dispatch('click');
     assert.equal(idMap.get('update-menu').open, true);
     assert.equal(idMap.get('upd-cur').textContent, 'v1.0.0');

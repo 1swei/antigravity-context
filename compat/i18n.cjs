@@ -226,7 +226,7 @@ module.exports = function createDashboardI18n(initialLanguage) {
   }
   // The factory is serialized into both the sandboxed panel and IDE webviews.
   // Build the selector without HTML sinks, imports or host-specific APIs.
-  function mountLanguagePicker({button,parent=button.parentNode,choose,label=button}) {
+  function mountLanguagePicker({button,parent=button.parentNode,choose,label=button,nativeTitle=true}) {
     const doc=button.ownerDocument,menu=doc.createElement('div');
     menu.setAttribute('popover','manual');menu.setAttribute('role','menu');
     menu.dataset.languageMenu='';
@@ -242,7 +242,7 @@ module.exports = function createDashboardI18n(initialLanguage) {
     const isOpen=()=>menu.matches(':popover-open');
     function close(restore=true){if(isOpen())menu.hidePopover();button.setAttribute('aria-expanded','false');if(restore)button.focus({preventScroll:true});}
     function position(){if(!isOpen())return;const r=button.getBoundingClientRect(),m=menu.getBoundingClientRect(),win=doc.defaultView;menu.style.left=Math.max(6,Math.min(r.right-m.width,win.innerWidth-m.width-6))+'px';menu.style.top=(r.bottom+m.height+6<win.innerHeight?r.bottom+5:Math.max(6,r.top-m.height-5))+'px';}
-    function update(){label.textContent=language==='en'?'EN':language==='zh-TW'?'繁':'中';menu.setAttribute('aria-label',t('language'));button.setAttribute('aria-label',t('language'));button.title=t('language');for(const item of options){const selected=item.dataset.language===language;item.setAttribute('aria-checked',String(selected));item.style.background=selected?'var(--pulse-selected,var(--pulse-hover))':'transparent';}position();}
+    function update(){label.textContent=language==='en'?'EN':language==='zh-TW'?'繁':'中';menu.setAttribute('aria-label',t('language'));button.setAttribute('aria-label',t('language'));if(nativeTitle)button.title=t('language');else{button.title='';button.removeAttribute('title');}for(const item of options){const selected=item.dataset.language===language;item.setAttribute('aria-checked',String(selected));item.style.background=selected?'var(--pulse-selected,var(--pulse-hover))':'transparent';}position();}
     function open(){update();menu.showPopover();button.setAttribute('aria-expanded','true');position();options.find(item=>item.dataset.language===language).focus({preventScroll:true});}
     function toggle(){if(isOpen())close();else open();}
     function keys(event){if(!isOpen())return;const path=event.composedPath(),index=options.findIndex(item=>path.includes(item));

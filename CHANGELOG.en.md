@@ -3,8 +3,16 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.2` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.3` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-16`
+
+---
+
+## v1.0.3 (`2026-11-16`)
+
+- **Restore 6-Hour Auto-Check Schedule**: Restored the silent background update check interval to startup + every 6 hours and removed the extra check on opening the usage modal.
+- **Themed Hover Tooltips in Usage Modal**: Replaced browser-native `title` tooltips on the top-right action buttons (`Language`, `Check for updates`, `Refresh`, `Close`) and summary metric cards with custom tooltips synced to the host theme and font tokens.
+- **Cleaner Plugin Overview Layout & Manifest Metadata**: Replaced oversized external badge images in `README` with clean inline version/license links and completed `displayName`, `author`, `license`, and repository fields in `plugin.json`.
 
 ---
 

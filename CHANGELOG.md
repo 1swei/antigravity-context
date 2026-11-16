@@ -3,8 +3,16 @@
 **简体中文** · [English](CHANGELOG.en.md)
 
 - **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
-- **当前版本**：`1.0.2`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
+- **当前版本**：`1.0.3`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
 - **更新时间**：`2026-11-16`
+
+---
+
+## v1.0.3（`2026-11-16`）
+
+- **自动更新周期恢复为 6 小时**：后台静默检查保持启动后及每 6 小时检查一次，移除打开用量统计弹窗时的额外检查。
+- **用量统计弹窗悬停提示融合主题**：右上角「语言 / 检查更新 / 刷新 / 关闭」按钮与顶部汇总卡片改用随宿主主题配色与字体同步的自绘悬浮提示，替换浏览器默认 `title` 弹窗。
+- **修复插件说明页排版与清单元数据**：移除 `README` 中会被宿主插件页放大的外链徽章图片，并在 `plugin.json` 中补全 `displayName`、`author`、`license` 与仓库地址。
 
 ---
 
