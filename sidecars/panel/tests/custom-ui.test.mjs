@@ -1258,7 +1258,7 @@ test('usage-ui header update button shows red dot on available update and suppor
     dash.update({ ...usageData, syncing: true, syncMode: 'incremental', syncProgress: null });
     assert.equal(idMap.get('timezone').textContent, '导入数据中…');
     assert.equal(idMap.get('sync-prog-wrap').hidden, false);
-    assert.equal(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'), '0');
+    assert.equal(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'), '2');
     assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0.02)');
     assert.equal(idMap.get('refresh').disabled, true);
     assert.equal(idMap.get('refresh').getAttribute('aria-busy'), 'true');
@@ -1276,6 +1276,25 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0)');
     assert.equal(idMap.get('alert').hidden, false);
     assert.equal(idMap.get('alert').textContent, '部分记录暂不可读取，用量可能不完整');
+
+    // High-FPS rAF completion sweeps all the way to scaleX(1) (100%) before hiding
+    const rafQueue = [];
+    const prevRaf = globalThis.requestAnimationFrame, prevCancelRaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = fn => { rafQueue.push(fn); return rafQueue.length; };
+    globalThis.cancelAnimationFrame = () => {};
+    try {
+      dash.update({ ...usageData, syncing: true, syncMode: 'incremental', syncProgress: null });
+      assert.equal(idMap.get('sync-prog-wrap').hidden, false);
+      if (rafQueue.length) rafQueue.shift()(16);
+      dash.update({ ...usageData, syncing: false, syncMode: null, syncProgress: null });
+      let ts = 32;
+      while (rafQueue.length && ts < 2000) { rafQueue.shift()(ts); ts += 16; }
+      assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(1)');
+      assert.equal(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'), '100');
+    } finally {
+      globalThis.requestAnimationFrame = prevRaf;
+      globalThis.cancelAnimationFrame = prevCancelRaf;
+    }
 
     dash.update({ ...usageData, syncing: false, confirmedMissingConversations: 1 });
     assert.equal(idMap.get('alert').hidden, false);

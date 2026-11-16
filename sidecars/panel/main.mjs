@@ -39,15 +39,12 @@ const metrics = async input => {
   if(ownership&&!await ownership.isOwner())throw Error('Sidecar ownership changed');
   runtimeSettings();
   const base=await store.snapshot(input);
-  const forceSync=input?.usageSync===true,refreshSync=!forceSync&&input?.usageRefresh===true;
-  if(forceSync)void usage.sync(true);
-  else if(refreshSync)void usage.sync(false);
-  const checkSync=!forceSync&&!refreshSync&&input?.usageCheck===true&&typeof usage.needsInitialSync==='function'&&await usage.needsInitialSync();
-  let usageData=await usage.snapshot({sync:forceSync||refreshSync||checkSync});
-  if((checkSync||refreshSync)&&usageData?.syncing&&usage.pending){
-    await Promise.race([usage.pending.catch(()=>{}),new Promise(resolve=>setTimeout(resolve,180))]);
-    usageData=await usage.snapshot({sync:false});
+  const forceSync=input?.usageSync===true,smartSync=!forceSync&&(input?.usageRefresh===true||input?.usageCheck===true);
+  const syncPromise=forceSync?usage.sync(true):smartSync&&typeof usage.syncSmart==='function'?usage.syncSmart():null;
+  if(smartSync&&syncPromise){
+    await Promise.race([syncPromise.catch(()=>{}),new Promise(resolve=>setTimeout(resolve,80))]);
   }
+  const usageData=await usage.snapshot({sync:forceSync});
   const update=typeof updater.publicState==='function'?updater.publicState():null;
   return {...base,usage:usageData,preferences:await preferences.snapshot(),theme:await readHostTheme(),integration:integration.health,...(update?{update}:{})};
 };

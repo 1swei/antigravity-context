@@ -105,26 +105,18 @@ for(const host of ['app','preview'])test(`${host} real entrypoint keeps unknown 
   }
 });
 
-test('app real entrypoint skips history sync on usageCheck once initialized, and runs only on first open', () => {
+test('app real entrypoint runs unified syncSmart on both usageCheck and usageRefresh', () => {
   const url = new URL('../main.mjs', import.meta.url).href;
   const checkFixture = async () => {
     const { SourceTextModule, SyntheticModule, createContext } = await import('node:vm');
     const { readFile } = await import('node:fs/promises');
-    const state = { syncs: [], snapshots: [], initial: false };
+    const state = { syncs: [], smartCalls: 0, snapshots: [] };
     let snapshot;
     class Owner { token='fixture'; startedAt=1; async claim(){return true;} owns(){return true;} async isOwner(){return true;} watch(){} stop(){} }
     class Store { constructor(c,o){} async snapshot(){return {connection:'live'};} dispose(){} }
     class Usage {
-      pending = null;
-      async needsInitialSync(){ return state.initial; }
-      async snapshot(opts){
-        state.snapshots.push(opts??null);
-        if (opts?.sync) {
-          this.pending = Promise.resolve();
-          return { syncing: true };
-        }
-        return { syncing: false };
-      }
+      async syncSmart(){ state.smartCalls++; }
+      async snapshot(opts){ state.snapshots.push(opts??null); return { syncing: false }; }
       async sync(force){ state.syncs.push(force); }
       ingestLive(){} dispose(){}
     }
@@ -155,24 +147,15 @@ test('app real entrypoint skips history sync on usageCheck once initialized, and
       return new SyntheticModule(Object.keys(values), function(){ for (const [k,v] of Object.entries(values)) this.setExport(k,v); }, { context });
     });
     await entry.evaluate();
-    const alreadySynced = await snapshot({ conversationId: 'fixture', force: true, usageCheck: true });
-    const afterInitialized = [...state.snapshots];
-    state.snapshots.length = 0;
-    state.initial = true;
-    const firstOpen = await snapshot({ conversationId: 'fixture', force: true, usageCheck: true });
-    const afterFirstOpen = [...state.snapshots];
-    state.snapshots.length = 0;
+    await snapshot({ conversationId: 'fixture', force: true, usageCheck: true });
     await snapshot({ conversationId: 'fixture', force: true, usageRefresh: true });
-    return { syncs: state.syncs, afterInitialized, alreadySyncing: alreadySynced.usage.syncing, firstOpenSnapshots: afterFirstOpen, firstSyncing: firstOpen.usage.syncing, refreshSnapshots: state.snapshots };
+    return { syncs: state.syncs, smartCalls: state.smartCalls, snapshots: state.snapshots };
   };
   const script = `const url=${JSON.stringify(url)};(${checkFixture.toString()})().then(v=>console.log(JSON.stringify(v)))`;
   const result = spawnSync(process.execPath, ['--experimental-vm-modules', '--input-type=module', '-e', script], { encoding: 'utf8', timeout: 15000, windowsHide: true });
   assert.equal(result.status, 0, result.stderr);
   const out = JSON.parse(result.stdout.trim());
-  assert.deepEqual(out.syncs, [false]);
-  assert.deepEqual(out.afterInitialized, [{ sync: false }]);
-  assert.equal(out.alreadySyncing, false);
-  assert.deepEqual(out.firstOpenSnapshots, [{ sync: true }, { sync: false }]);
-  assert.equal(out.firstSyncing, false);
-  assert.deepEqual(out.refreshSnapshots, [{ sync: true }, { sync: false }]);
+  assert.deepEqual(out.syncs, []);
+  assert.equal(out.smartCalls, 2);
+  assert.deepEqual(out.snapshots, [{ sync: false }, { sync: false }]);
 });

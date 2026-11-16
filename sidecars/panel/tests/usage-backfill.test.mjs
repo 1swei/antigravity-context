@@ -209,3 +209,16 @@ test('syncProgress tracks monotonic progress for both sliced full sync and incre
  assert.equal(incAfter.syncing,false);assert.equal(incAfter.syncMode,null);assert.equal(incAfter.syncProgress,null);
  assert.equal(seen.length,0,'Incremental refresh skips all settled complete conversations');
 });
+
+test('syncSmart chooses full sync before backfill checkpoint exists and incremental sync afterwards',async t=>{
+ const {ledger}=await setup(t);const third='33333333-3333-3333-3333-333333333333';
+ const store=baseStore(),calls=[];
+ store.client.trajectory=async cid=>{calls.push(cid);return raw(1);};
+ const usage=tracker(t,store,ledger,{discoverLocal:disk([id,other,third]),maxCandidates:1,sliceMs:5000});
+ await usage.syncSmart();
+ while(usage.continuation||usage.pending)await delay(5);
+ assert.equal(calls.length,3,'Initial smart sync without checkpoint imports all conversations');
+ calls.length=0;
+ await usage.syncSmart();
+ assert.equal(calls.length,0,'Subsequent smart sync uses incremental mode and skips settled histories');
+});

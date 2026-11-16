@@ -59,8 +59,8 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     .table th{font-weight:450;font-size:11px;color:var(--pulse-muted);background:var(--pulse-control);padding:8px 11px;border-bottom:1px solid var(--pulse-separator)}.table td{padding:9px 11px;border-bottom:1px solid var(--pulse-separator)}.table td:not(:first-child){font-family:var(--pulse-mono,ui-monospace,monospace);font-size:11.5px}.table th:first-child,.table td:first-child{text-align:left;padding-left:14px}.table th:last-child,.table td:last-child{padding-right:14px}.table td:first-child span{margin-right:7px}.table tbody tr:hover td{background:var(--pulse-hover)}.table tbody tr:last-child td{border-bottom:0}.table tfoot td{font-weight:500;background:var(--pulse-control);border-top:1px solid var(--pulse-separator);border-bottom:0;color:var(--pulse-foreground)}
     .share-cell{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end}.share-bar{width:34px;height:4px;border-radius:999px;background:var(--pulse-hover);overflow:hidden;display:inline-block}.share-bar i{display:block;height:100%;background:var(--model-color)}
     .footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;padding-top:12px;border-top:1px solid var(--pulse-separator);font-size:11px;color:var(--pulse-muted)}
-    .sync-prog-wrap{position:absolute;top:0;left:0;right:0;height:3px;background:var(--pulse-track);z-index:5;pointer-events:none;overflow:hidden}.sync-prog-wrap[hidden]{display:none}
-    #sync-prog-fill{display:block;width:100%;height:100%;background:var(--pulse-accent);transform-origin:left;transform:scaleX(0);transition:transform 220ms cubic-bezier(.23,1,.32,1)}
+    .sync-prog-wrap{position:absolute;top:0;left:0;right:0;height:3px;background:var(--pulse-track);z-index:5;pointer-events:none;overflow:hidden;opacity:1;transition:opacity 180ms ease}.sync-prog-wrap[hidden]{display:none}
+    #sync-prog-fill{display:block;width:100%;height:100%;background:var(--pulse-accent);transform-origin:left;transform:scaleX(0);will-change:transform}
     .alert{color:var(--pulse-warning);margin-top:10px;font-size:11px}
     .tip{position:fixed;z-index:20;max-width:280px;padding:10px 12px;border:1px solid var(--pulse-border);border-radius:10px;background:var(--pulse-menu);box-shadow:0 8px 28px var(--pulse-shadow);color:var(--pulse-foreground);font-size:11px;pointer-events:none}.tip[hidden]{display:none}.tip .tip-title{font-size:10px;color:var(--pulse-muted);margin-bottom:4px;font-family:var(--pulse-mono,ui-monospace,monospace)}.tip strong{font-size:15px;font-weight:500}.tip-model{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:2px 0;margin-top:3px}.tip-model .dot{margin-right:6px}.tip-model.dimmed{opacity:.5}.tip-model.active{font-weight:500}.model-share{font-size:10px;color:var(--pulse-muted);margin-left:8px;font-family:var(--pulse-mono,ui-monospace,monospace)}
     .action-tip{position:fixed;z-index:30;padding:5px 9px;border:1px solid var(--pulse-border);border-radius:8px;background:var(--pulse-menu);box-shadow:0 6px 20px var(--pulse-shadow);color:var(--pulse-foreground);font:500 11px/1.35 var(--pulse-font,"Google Sans Flex","Google Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif);white-space:nowrap;pointer-events:none}.action-tip[hidden]{display:none}
@@ -97,6 +97,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   const $=id=>view.getElementById(id),text=(id,value)=>{if($(id).textContent!==value)$(id).textContent=value;};
   let value=null,rangeMode='30d',year=null,anchorMonth=null,customFrom=null,customTo=null,selectedDate=null,disabledModels=new Set(),lastKey='',chartDataSig='',busy=false,opener=null;
   let disposed=false,refreshMotion=null,refreshDelay=null,finishRefresh=null,refreshPending=false,syncSpinning=false,spinStarted=0,accountKey=null,tipTarget=null,tipModel=null,actionTipTarget=null;
+  let progVisual=0,progTarget=0,progActive=false,progCompleting=false,progHoldTimer=null,progRaf=null,progLastTs=0;
   let updateState={state:'idle'},updateBusy=false,updateTimer=null;
   const zh=()=>language.language==='zh-CN'||language.language==='zh-TW',tw=()=>language.language==='zh-TW',w=(cn,en,twText)=>(tw()&&twText!==undefined)?twText:(zh()?cn:en);
   const EFFORT_PAREN_RE=/\s*\((?:x?high|medium|med|low|minimal|none|thinking|adaptive|reasoning|fast|default)\)\s*$/i;
@@ -423,9 +424,9 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     renderGuide();
     renderUpdate();
     if(!value){
-      chartDataSig='';syncSpinning=false;syncRefreshSpin();
+      chartDataSig='';syncSpinning=false;syncRefreshSpin();finishProgressBar();
       closeMenus();$('tip').hidden=true;$('usage-content').hidden=true;$('usage-waiting').hidden=false;
-      text('usage-waiting',w('正在连接统计…','Connecting…','正在連線統計資料…'));text('subtitle',w('连接本机统计','Connecting local data','連線本機統計'));text('coverage','');text('timezone','');$('sync-prog-wrap').hidden=true;$('sync-prog-wrap').removeAttribute('aria-valuenow');$('sync-prog-fill').style.setProperty('transform','scaleX(0)');$('alert').hidden=true;
+      text('usage-waiting',w('正在连接统计…','Connecting…','正在連線統計資料…'));text('subtitle',w('连接本机统计','Connecting local data','連線本機統計'));text('coverage','');text('timezone','');$('alert').hidden=true;
       for(const metric of $('totals').children){setActionTip(metric,'');metric.querySelector('.value')?.replaceChildren(node('span','','—'));}
       return;
     }
@@ -480,17 +481,8 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     text('coverage',w(`${full(value.requests)} 次请求${value.firstDate?' · 始于 '+value.firstDate:''}`,`${full(value.requests)} requests${value.firstDate?' · since '+value.firstDate:''}`,`${full(value.requests)} 次請求${value.firstDate?' · 始於 '+value.firstDate:''}`));
     const activeSync=Boolean(value.syncMode||(value.syncing&&value.summaryStale!==true));
     syncSpinning=activeSync;syncRefreshSpin();
-    const syncWrap=$('sync-prog-wrap'),syncFill=$('sync-prog-fill');
-    if(activeSync){
-      syncWrap.hidden=false;
-      const p=value.syncProgress,known=p&&Number.isFinite(p.total)&&p.total>0&&Number.isFinite(p.done)&&p.done>=0;
-      const ratio=known?Math.max(0.02,Math.min(1,p.done/p.total)):0.02;
-      syncWrap.setAttribute('aria-valuenow',String(Math.round((known?Math.min(1,p.done/p.total):0)*100)));
-      syncFill.style.setProperty('transform',`scaleX(${ratio})`);
-    }else{
-      syncWrap.hidden=true;syncWrap.removeAttribute('aria-valuenow');syncFill.style.setProperty('transform','scaleX(0)');
-    }
-    text('timezone',activeSync?w('导入数据中…','Importing data…','匯入資料中…'):w('本机存储','Local only','本機儲存'));
+    syncProgressBar(activeSync||refreshPending,value.syncProgress);
+    text('timezone',(activeSync||refreshPending)?w('导入数据中…','Importing data…','匯入資料中…'):w('本机存储','Local only','本機儲存'));
     const alerts=[];if(value.unknownRequests)alerts.push(w(`${value.unknownRequests} 次请求日期未知，共 ${compact(value.unknownTokens)} Token`,`${value.unknownRequests} undated requests · ${compact(value.unknownTokens)} tokens`,`${value.unknownRequests} 次請求日期未知，共 ${compact(value.unknownTokens)} Token`));
     const confirmedMissing=value.confirmedMissingConversations??(value.syncing?0:value.missingConversations);
     if(value.unreadableFiles||confirmedMissing>0&&!value.syncing||value.persistenceError)alerts.push(w('部分记录暂不可读取，用量可能不完整','Some records are unavailable; usage may be incomplete','部分記錄暫無法讀取，用量可能不完整'));
@@ -680,6 +672,83 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     if(!Number.isFinite(next)||next<0||next>=buttons.length||buttons[next].disabled)return;event.preventDefault();event.target.tabIndex=-1;buttons[next].tabIndex=0;buttons[next].focus();
   });
   const languagePicker=language.mountLanguagePicker({button:$('locale'),label:$('locale-label'),parent:dialog,choose:onLanguage,nativeTitle:false});
+  function paintProgress(ratio){
+    const fill=$('sync-prog-fill');
+    if(fill)fill.style.setProperty('transform',`scaleX(${Number(Math.max(0,Math.min(1,ratio)).toFixed(4))})`);
+    const wrap=$('sync-prog-wrap');
+    if(wrap){
+      if(progActive)wrap.setAttribute('aria-valuenow',String(Math.round(Math.max(0,Math.min(1,ratio))*100)));
+      else wrap.removeAttribute('aria-valuenow');
+    }
+  }
+  function cancelProgressTimers(){
+    if(progRaf!==null&&typeof cancelAnimationFrame==='function')cancelAnimationFrame(progRaf);
+    progRaf=null;clearTimeout(progHoldTimer);progHoldTimer=null;
+  }
+  function finishProgressBar(){
+    cancelProgressTimers();
+    progActive=false;progCompleting=false;progVisual=0;progTarget=0;
+    const wrap=$('sync-prog-wrap');
+    if(wrap){wrap.hidden=true;wrap.style.opacity='';}
+    paintProgress(0);
+  }
+  function tickProgress(ts){
+    progRaf=null;
+    if(disposed||!progActive)return;
+    const dt=progLastTs?Math.min(0.05,(ts-progLastTs)/1000):0.016;
+    progLastTs=ts;
+    if(progCompleting){
+      progTarget=1;
+      progVisual+=Math.max(dt*4.5,(1-progVisual)*Math.min(1,dt*16));
+      if(progVisual>=0.997){
+        progVisual=1;paintProgress(1);
+        const wrap=$('sync-prog-wrap');
+        if(wrap)wrap.style.opacity='0';
+        progHoldTimer=setTimeout(()=>{if(!disposed&&progCompleting)finishProgressBar();},180);
+        progHoldTimer.unref?.();
+        return;
+      }
+    }else{
+      if(progTarget<0.78){
+        const ceiling=0.78;
+        progTarget=Math.min(ceiling,progTarget+(ceiling-progTarget)*dt*1.35);
+      }
+      progVisual+=(progTarget-progVisual)*Math.min(1,dt*12);
+    }
+    paintProgress(progVisual);
+    progRaf=requestAnimationFrame(tickProgress);
+  }
+  function syncProgressBar(active,progress){
+    const wrap=$('sync-prog-wrap');if(!wrap)return;
+    if(active){
+      clearTimeout(progHoldTimer);progHoldTimer=null;
+      wrap.hidden=false;wrap.style.opacity='1';
+      const known=progress&&Number.isFinite(progress.total)&&progress.total>0&&Number.isFinite(progress.done)&&progress.done>=0;
+      const realRatio=known?Math.min(0.97,Math.max(0,progress.done/progress.total)):0;
+      if(!progActive||progCompleting){
+        progActive=true;progCompleting=false;
+        progVisual=0.04;progTarget=Math.max(0.12,realRatio);progLastTs=0;
+      }else{
+        progTarget=Math.max(progTarget,realRatio);
+      }
+      if(typeof requestAnimationFrame==='function'){
+        if(progRaf===null){progLastTs=0;progRaf=requestAnimationFrame(tickProgress);}
+      }else{
+        progVisual=known?Math.max(0.02,progress.done/progress.total):0.02;
+        paintProgress(progVisual);
+      }
+      return;
+    }
+    if(!progActive)return;
+    if(typeof requestAnimationFrame==='function'){
+      if(!progCompleting){
+        progCompleting=true;progTarget=1;
+        if(progRaf===null){progLastTs=0;progRaf=requestAnimationFrame(tickProgress);}
+      }
+    }else{
+      finishProgressBar();
+    }
+  }
   function syncRefreshSpin(){
     if(disposed)return;
     const button=$('refresh'),turn=600,shouldSpin=refreshPending||syncSpinning;
@@ -705,9 +774,17 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   }
   $('refresh').addEventListener('click',async()=>{
     if(busy||disposed)return;refreshPending=true;syncRefreshSpin();
+    if(value&&dialog.open){syncProgressBar(true,value.syncProgress);text('timezone',w('导入数据中…','Importing data…','匯入資料中…'));}
     try{await onRefresh();}
     catch{if(!disposed){text('alert',w('暂时无法刷新，请稍后重试','Refresh unavailable. Try again shortly.','暫時無法重新整理，請稍後重試'));$('alert').hidden=false;}}
-    finally{refreshPending=false;syncRefreshSpin();}
+    finally{
+      refreshPending=false;syncRefreshSpin();
+      if(!disposed&&value){
+        const stillSync=Boolean(value.syncMode||(value.syncing&&value.summaryStale!==true));
+        syncProgressBar(stillSync,value.syncProgress);
+        if(!stillSync)text('timezone',w('本机存储','Local only','本機儲存'));
+      }
+    }
   });
   // Native showModal()/close() changes inertness across the complete host DOM.
   // In long chats this alone can block Chromium for seconds. A top-layer
@@ -767,5 +844,5 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   return {open(data,trigger,nextUpdate){if(nextUpdate!==undefined)updateState=nextUpdate;if(!data||disposed)return;accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();},
     update(data,nextUpdate){if(disposed)return;if(nextUpdate!==undefined){updateState=nextUpdate;renderUpdate();}if(!data){if(!value)return;value=null;lastKey='';if(dialog.open)render();return;}if(accountKey&&accountKey!==data.accountKey){selectedDate=null;disabledModels.clear();year=data.today.slice(0,4);anchorMonth=data.today.slice(0,7);const d30=add(data.today,-29);customFrom=data.firstDate&&d30<data.firstDate?data.firstDate:d30;customTo=data.today;}accountKey=data.accountKey;value=normalizeUsage(data);if(!dialog.open)return;const key=contentKey(data);if(key===lastKey)return;lastKey=key;render();},
     restoreModal(){if(!disposed&&dialog.open&&dialog.isConnected&&!dialog.matches(':popover-open')){closeMenus();present();}},
-    close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();languagePicker.dispose();themeObserver.disconnect();clearTimeout(refreshDelay);finishRefresh?.();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};
+    close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();cancelProgressTimers();languagePicker.dispose();themeObserver.disconnect();clearTimeout(refreshDelay);finishRefresh?.();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};
 };

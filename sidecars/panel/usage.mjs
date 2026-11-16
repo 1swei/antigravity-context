@@ -689,6 +689,15 @@ export class DesktopUsage{
     const confirmed=[...this.passFailures].filter(id=>(journal[hash(id)]?.failures||this.readFailures.get(id)?.failures||0)>=2).length;
     return {current,missing:missing+this.passFailures.size,confirmed,retrying:missing+this.passFailures.size-confirmed,more,partial};
   }
+  async syncSmart(){
+    if(this.disposed||!this.owns())return;
+    const scope=this.store.identity;
+    if(!scope)return;
+    if(this.pending)return this.pending;
+    if(this.continuation||this.fullRemaining.size)return this.sync(false);
+    const hasBackfill=this.host?await this.ledger.hasBackfillState(scope,this.host):false;
+    return this.sync(!hasBackfill);
+  }
   async needsInitialSync(){
     const scope=this.store.identity;
     if(!scope||!this.owns()||this.disposed||this.lastSync>0||this.pending||this.continuation)return false;
