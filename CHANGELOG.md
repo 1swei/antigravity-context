@@ -10,6 +10,7 @@
 
 ## v1.0.0（`2026-11-16`）
 
+- **开启自动更新与弹窗内在线更新安装**：[main.mjs](sidecars/panel/main.mjs) 重新接入 `AppUpdater`，支持启动后及每 6 小时自动静默检查 GitHub Releases；在用量统计弹窗右上角新增「检查更新」按钮（有新版本时显示红点提醒），支持弹窗内查看版本说明、实时进度条、SHA-256 校验在线安装与重载插件；更新 [update-worker.py](compat/update-worker.py) 为 `antigravity-context-{version}.zip` 并新增 `.github/workflows/release.yml` 自动发版打包工作流。
 - **统一插件标识为 `antigravity-context`**：`plugin.json`、`sidecars/panel/package.json`、`main.mjs`、`history.mjs`、`compat/platform.mjs`、`compat/ipc-host.cjs`、`compat/update-worker.py`、`updater.mjs` 与相关测试全部统一使用 `antigravity-context`，支持直接克隆至 `~/.gemini/config/plugins/antigravity-context`。
 
 - **移除右侧辅助栏看板**：`sidecars/panel/sidecar.json` 设为 `has_web_ui: false` 并移除 `ui_config`；删除右侧看板前端文件（`index.html`、`styles.css`、`app.js`、`panel-source.mjs`、`toolbar-preview.html`、`sdk.mjs` 及对应单测），并更新 [main.mjs](sidecars/panel/main.mjs) 以无头 Sidecar 模式运行内联状态栏注入与用量采集。

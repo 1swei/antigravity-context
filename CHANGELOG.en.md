@@ -10,6 +10,7 @@
 
 ## v1.0.0 (`2026-11-16`)
 
+- **Auto Update Check & Online Install in Usage Modal**: Re-enabled `AppUpdater` in [main.mjs](sidecars/panel/main.mjs) with silent startup and 6-hour periodic GitHub Releases checks; added a top-right update button in the usage analytics modal with a red-dot notification badge, release notes, download progress bar, SHA-256 verified online install, and plugin reload; updated [update-worker.py](compat/update-worker.py) for `antigravity-context-{version}.zip` and added `.github/workflows/release.yml`.
 - **Unified Plugin ID to `antigravity-context`**: Updated `plugin.json`, `sidecars/panel/package.json`, `main.mjs`, `history.mjs`, `compat/platform.mjs`, `compat/ipc-host.cjs`, `compat/update-worker.py`, `updater.mjs`, and unit tests to `antigravity-context` so users can clone directly into `~/.gemini/config/plugins/antigravity-context`.
 - **Removed Right-Pane Auxiliary Dashboard**: Set `has_web_ui: false` and removed `ui_config` in `sidecars/panel/sidecar.json`; deleted right-pane frontend assets (`index.html`, `styles.css`, `app.js`, `panel-source.mjs`, `toolbar-preview.html`, `sdk.mjs` and their tests) and updated [main.mjs](sidecars/panel/main.mjs) to run purely as a headless background collector and inline CDP injector.
 - **Branding & Versioning**: Renamed display name to **Antigravity Context**, bumped version to `1.0.0` across manifests, and redesigned [logo.svg](assets/logo.svg) with a segmented context-ring and pulse motif.

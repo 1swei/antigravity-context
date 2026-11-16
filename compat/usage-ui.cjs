@@ -1,5 +1,5 @@
 // Shared local usage views. Values and model labels are inserted as text.
-module.exports = function createUsageDashboard({root,language,setMarkup,hostLabel='Antigravity',guideDismissed=false,onDismissGuide,onLanguage,onRefresh}) {
+module.exports = function createUsageDashboard({root,language,setMarkup,hostLabel='Antigravity',guideDismissed=false,onDismissGuide,onLanguage,onRefresh,onUpdate=null}) {
   const dialog=document.createElement('dialog');dialog.id='usage-dashboard';dialog.setAttribute('popover','manual');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label',language.language==='zh-TW'?'用量統計':language.language==='zh-CN'?'用量统计':'Token usage');
   dialog.style.cssText='width:min(1000px,calc(100vw - 40px));max-width:none;height:auto;max-height:min(840px,calc(100dvh - 64px));min-height:min(500px,calc(100dvh - 64px));box-sizing:border-box;overflow:hidden;visibility:visible;pointer-events:auto;padding:0;border:1px solid var(--pulse-border);border-radius:16px;background:var(--pulse-background);color:var(--pulse-foreground);box-shadow:0 20px 64px rgba(0,0,0,.22)';
   const shell=document.createElement('div'),view=shell.attachShadow({mode:'open'});shell.style.height='auto';shell.style.maxHeight='inherit';dialog.append(shell);root.append(dialog);
@@ -16,7 +16,8 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     .sub{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--pulse-muted)}
     .live-dot{display:inline-block;width:6px;height:6px;background:var(--pulse-success);border-radius:50%}
     .actions{display:flex;gap:6px;align-items:center}
-    .actions button{display:inline-flex;align-items:center;justify-content:center;height:28px;min-width:28px;padding:0;color:var(--pulse-muted);border-radius:8px}
+    .actions button{position:relative;display:inline-flex;align-items:center;justify-content:center;height:28px;min-width:28px;padding:0;color:var(--pulse-muted);border-radius:8px}
+    .update-dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 1.5px var(--pulse-background);pointer-events:none}.update-dot[hidden]{display:none}
     .actions button#locale{min-width:34px;padding:0 10px;border-radius:9999px;background:var(--pulse-control);border-color:var(--pulse-separator);color:var(--pulse-foreground);font-size:12px;font-weight:450}
     .actions button:hover{background:var(--pulse-hover);color:var(--pulse-foreground)}
     .actions button#locale:hover{border-color:var(--pulse-border)}
@@ -63,6 +64,16 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     .usage-waiting{display:grid;place-items:center;min-height:240px;color:var(--pulse-muted);font-size:12px}.usage-waiting[hidden]{display:none}
     .year-picker{position:relative;flex:none}.year-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:6px;min-width:74px;height:28px;padding:0 8px 0 10px;background:var(--pulse-control);border:1px solid var(--pulse-separator);color:var(--pulse-foreground);font-size:11px;font-weight:450;border-radius:8px;font-family:var(--pulse-mono,ui-monospace,monospace)}.year-trigger:hover,.year-trigger[aria-expanded=true]{background:var(--pulse-hover);border-color:var(--pulse-border)}.menu-chevron{width:16px;height:16px;color:var(--pulse-muted);transition:transform 160ms cubic-bezier(.23,1,.32,1)}.year-trigger[aria-expanded=true] .menu-chevron{transform:rotate(180deg)}
     .menu-list{position:fixed;inset:auto;margin:0;padding:4px;min-width:108px;max-height:240px;overflow-y:auto;border:1px solid var(--pulse-border);border-radius:10px;background:var(--pulse-menu);color:var(--pulse-foreground);box-shadow:0 8px 26px var(--pulse-shadow);transform-origin:top right;opacity:1;transform:scale(1);transition:opacity 140ms ease,transform 160ms cubic-bezier(.23,1,.32,1)}.menu-list::backdrop{background:transparent;pointer-events:none}.menu-list.month-menu{min-width:168px}.menu-list.custom-menu{width:236px;max-height:none;padding:12px;overflow:visible}
+    .menu-list.update-menu{width:292px;max-height:none;padding:14px;overflow:visible}
+    .upd-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.upd-head strong{font-size:13px;font-weight:550;color:var(--pulse-foreground)}
+    .upd-meta{margin:0 0 10px;display:flex;flex-direction:column;gap:5px}.upd-meta>div{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px}.upd-meta dt{color:var(--pulse-muted)}.upd-meta dd{margin:0;font-family:var(--pulse-mono,ui-monospace,monospace);font-size:11.5px}
+    .upd-prog-wrap{margin:10px 0}.upd-prog-wrap[hidden]{display:none}.upd-prog-head{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:var(--pulse-muted);margin-bottom:5px;font-family:var(--pulse-mono,ui-monospace,monospace)}
+    .upd-prog-track{position:relative;height:4px;border-radius:999px;background:var(--pulse-track);overflow:hidden}#upd-prog-fill{position:absolute;inset:0;border-radius:inherit;background:var(--pulse-accent);transform-origin:left;transform:scaleX(0);transition:transform 220ms cubic-bezier(.23,1,.32,1)}
+    .upd-prog-wrap[data-indeterminate=true] #upd-prog-fill{animation:upd-indet 1.2s linear infinite}
+    @keyframes upd-indet{from{transform:translateX(-40%) scaleX(.4)}to{transform:translateX(100%) scaleX(.4)}}
+    .upd-notes{margin:8px 0 0;padding:8px 10px;border-radius:7px;background:var(--pulse-control);border:1px solid var(--pulse-separator);font-size:11px;line-height:1.5;color:var(--pulse-muted);white-space:pre-line;max-height:96px;overflow:auto}.upd-notes[hidden]{display:none}
+    .upd-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--pulse-separator)}.upd-foot span{font-size:10.5px;color:var(--pulse-muted);line-height:1.35;min-width:0}
+    .upd-foot button{flex:none;height:26px;padding:0 11px;border-radius:7px;font-size:11px;font-weight:500;border:1px solid var(--pulse-border);background:var(--pulse-control);color:var(--pulse-foreground)}.upd-foot button:hover:not([disabled]){background:var(--pulse-hover)}.upd-foot button.primary{border-color:transparent;background:var(--pulse-accent);color:#fff}.upd-foot button.primary:hover:not([disabled]){filter:brightness(1.06)}.upd-foot button[hidden]{display:none}
     .custom-fields{display:flex;flex-direction:column;gap:10px}.custom-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--pulse-muted)}.custom-field input{height:30px;padding:0 8px;border:1px solid var(--pulse-border);border-radius:7px;background:var(--pulse-control);color:var(--pulse-foreground);font:12px/1.2 var(--pulse-mono,ui-monospace,monospace);color-scheme:inherit}.custom-field input:focus-visible{outline:2px solid var(--pulse-accent);outline-offset:1px}
     .custom-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:2px}.custom-actions button{height:26px;padding:0 11px;border-radius:7px;font-size:11px;font-weight:450;border:1px solid var(--pulse-separator);background:var(--pulse-control);color:var(--pulse-foreground)}.custom-actions button:hover{background:var(--pulse-hover)}.custom-actions button.primary{border-color:transparent;background:var(--pulse-accent);color:#fff;font-weight:500}.custom-actions button.primary:hover{filter:brightness(1.06)}
     .menu-option{width:100%;border:0;border-radius:6px;padding:6px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;text-align:left;background:transparent;color:var(--pulse-foreground);font-family:var(--pulse-mono,ui-monospace,monospace)}.menu-option:hover,.menu-option:focus-visible{background:var(--pulse-hover)}.menu-option[aria-selected=true]{background:color-mix(in srgb,var(--pulse-accent) 12%,var(--pulse-menu));font-weight:500}.menu-meta{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--pulse-muted)}.menu-check{color:var(--pulse-accent);width:15px;height:15px;opacity:0}.menu-option[aria-selected=true] .menu-check{opacity:1}
@@ -76,13 +87,14 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     @media(prefers-reduced-motion:reduce){button,.menu-list,.menu-chevron{transition:none}button:active{transform:none}}
   `;view.append(css);
   const page=document.createElement('div');page.className='page';
-  setMarkup(page,`<header class="top"><div class="title-group"><h1 id="title"></h1><div class="sub"><span class="live-dot"></span><span id="subtitle"></span></div></div><div class="actions"><button id="locale" type="button" aria-label="Language"><span id="locale-label" class="locale-label">中</span></button><button id="refresh" type="button" aria-label="Refresh"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-180q-125 0-212.5-87.5T180-480q0-125 87.5-212.5T480-780q71 0 132.5 31.5T716-662v-118h60v226H550v-60h128q-34-48-85.5-77T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h64q-28 97-107 158.5T480-180Z"/></svg></button><button id="close" type="button" aria-label="Close"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m256-213.85-42.15-42.15L437.85-480l-224-224L256-746.15l224 224 224-224L746.15-704l-224 224 224 224L704-213.85l-224-224-224 224Z"/></svg></button></div></header><div class="totals" id="totals"></div><section id="usage-waiting" class="usage-waiting" role="status" hidden></section><div id="usage-content" class="usage-content" hidden><section id="activity-section"><div class="section-head"><div><h2 id="activity-title"></h2><div class="muted" id="heat-sub"></div></div><div class="chart-controls"><div class="year-picker"><button id="year" type="button" class="year-trigger" aria-label="Year" aria-haspopup="listbox" aria-controls="year-menu" aria-expanded="false"><span id="year-label"></span><svg class="menu-chevron" viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-357.85 253.85-584 296-626.15l184 184 184-184L706.15-584 480-357.85Z"/></svg></button><div id="year-menu" class="menu-list" role="listbox" aria-label="Year" popover="manual"></div></div></div></div><div class="heat-wrap"><div class="calendar"><div class="months" id="months"></div><div class="heat-row"><div class="weekdays" id="weekdays"></div><div class="heat" id="heat"></div></div></div></div><div class="heat-footer"><span id="heat-summary"></span><div class="scale"><span id="less"></span><i class="swatch"></i><i class="swatch" data-level="1"></i><i class="swatch" data-level="2"></i><i class="swatch" data-level="3"></i><i class="swatch" data-level="4"></i><span id="more"></span></div></div></section><section id="breakdown-section" class="breakdown-section"><div class="section-head"><div><div class="section-title"><h2 id="detail-title"></h2><span class="range-badge" id="range-display"></span></div><div class="chart-summary" id="chart-summary"></div></div><div class="chart-controls"><div class="seg" id="date-filter"><button type="button" data-range="7d"></button><button type="button" data-range="30d"></button><button type="button" id="month-preset" data-range="month" aria-haspopup="listbox" aria-controls="month-menu" aria-expanded="false"><span id="month-preset-label"></span><svg class="menu-chevron" viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-357.85 253.85-584 296-626.15l184 184 184-184L706.15-584 480-357.85Z"/></svg></button><button type="button" id="year-preset" data-range="year"></button><button type="button" id="custom-preset" data-range="custom" aria-haspopup="dialog" aria-controls="custom-menu" aria-expanded="false"><span id="custom-preset-label"></span><svg class="menu-chevron" viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-357.85 253.85-584 296-626.15l184 184 184-184L706.15-584 480-357.85Z"/></svg></button></div><div id="month-menu" class="menu-list month-menu" role="listbox" aria-label="Month" popover="manual"></div><div id="custom-menu" class="menu-list custom-menu" role="dialog" aria-label="Custom date range" popover="manual"><div class="custom-fields"><label class="custom-field"><span id="custom-from-label"></span><input id="custom-from" type="date" /></label><label class="custom-field"><span id="custom-to-label"></span><input id="custom-to" type="date" /></label><div class="custom-actions"><button id="custom-cancel" type="button"></button><button id="custom-apply" type="button" class="primary"></button></div></div></div></div></div><div class="legend" id="legend"></div><div class="chart-wrap"><div class="chart"><div class="axis" id="axis"></div><div class="plot" id="plot"></div></div></div><div class="table-wrap"><table class="table"><thead><tr id="table-head"></tr></thead><tbody id="table-body"></tbody><tfoot id="table-foot"></tfoot></table></div></section></div><div class="alert" id="alert" hidden></div><footer class="footer"><span id="coverage"></span><span id="timezone"></span></footer><div class="tip" id="tip" role="status" hidden></div>`);view.append(page);
+  setMarkup(page,`<header class="top"><div class="title-group"><h1 id="title"></h1><div class="sub"><span class="live-dot"></span><span id="subtitle"></span></div></div><div class="actions"><button id="locale" type="button" aria-label="Language"><span id="locale-label" class="locale-label">中</span></button><button id="update-btn" type="button" aria-label="Check for updates" aria-haspopup="dialog" aria-controls="update-menu" aria-expanded="false"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg><span id="update-dot" class="update-dot" hidden></span></button><button id="refresh" type="button" aria-label="Refresh"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-180q-125 0-212.5-87.5T180-480q0-125 87.5-212.5T480-780q71 0 132.5 31.5T716-662v-118h60v226H550v-60h128q-34-48-85.5-77T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h64q-28 97-107 158.5T480-180Z"/></svg></button><button id="close" type="button" aria-label="Close"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m256-213.85-42.15-42.15L437.85-480l-224-224L256-746.15l224 224 224-224L746.15-704l-224 224 224 224L704-213.85l-224-224-224 224Z"/></svg></button><div id="update-menu" class="menu-list update-menu" role="dialog" aria-label="Plugin update" popover="manual"><div class="upd-head"><strong id="upd-status"></strong></div><dl class="upd-meta"><div><dt id="upd-cur-lbl"></dt><dd id="upd-cur">—</dd></div><div><dt id="upd-lat-lbl"></dt><dd id="upd-lat">—</dd></div></dl><div id="upd-prog-wrap" class="upd-prog-wrap" hidden><div class="upd-prog-head"><span id="upd-prog-lbl"></span><span id="upd-prog-val"></span></div><div class="upd-prog-track"><i id="upd-prog-fill"></i></div></div><p id="upd-notes" class="upd-notes" hidden></p><div class="upd-foot"><span id="upd-feedback" role="status"></span><button id="upd-action" type="button"></button></div></div></div></header><div class="totals" id="totals"></div><section id="usage-waiting" class="usage-waiting" role="status" hidden></section><div id="usage-content" class="usage-content" hidden><section id="activity-section"><div class="section-head"><div><h2 id="activity-title"></h2><div class="muted" id="heat-sub"></div></div><div class="chart-controls"><div class="year-picker"><button id="year" type="button" class="year-trigger" aria-label="Year" aria-haspopup="listbox" aria-controls="year-menu" aria-expanded="false"><span id="year-label"></span><svg class="menu-chevron" viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-357.85 253.85-584 296-626.15l184 184 184-184L706.15-584 480-357.85Z"/></svg></button><div id="year-menu" class="menu-list" role="listbox" aria-label="Year" popover="manual"></div></div></div></div><div class="heat-wrap"><div class="calendar"><div class="months" id="months"></div><div class="heat-row"><div class="weekdays" id="weekdays"></div><div class="heat" id="heat"></div></div></div></div><div class="heat-footer"><span id="heat-summary"></span><div class="scale"><span id="less"></span><i class="swatch"></i><i class="swatch" data-level="1"></i><i class="swatch" data-level="2"></i><i class="swatch" data-level="3"></i><i class="swatch" data-level="4"></i><span id="more"></span></div></div></section><section id="breakdown-section" class="breakdown-section"><div class="section-head"><div><div class="section-title"><h2 id="detail-title"></h2><span class="range-badge" id="range-display"></span></div><div class="chart-summary" id="chart-summary"></div></div><div class="chart-controls"><div class="seg" id="date-filter"><button type="button" data-range="7d"></button><button type="button" data-range="30d"></button><button type="button" id="month-preset" data-range="month" aria-haspopup="listbox" aria-controls="month-menu" aria-expanded="false"><span id="month-preset-label"></span><svg class="menu-chevron" viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-357.85 253.85-584 296-626.15l184 184 184-184L706.15-584 480-357.85Z"/></svg></button><button type="button" id="year-preset" data-range="year"></button><button type="button" id="custom-preset" data-range="custom" aria-haspopup="dialog" aria-controls="custom-menu" aria-expanded="false"><span id="custom-preset-label"></span><svg class="menu-chevron" viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-357.85 253.85-584 296-626.15l184 184 184-184L706.15-584 480-357.85Z"/></svg></button></div><div id="month-menu" class="menu-list month-menu" role="listbox" aria-label="Month" popover="manual"></div><div id="custom-menu" class="menu-list custom-menu" role="dialog" aria-label="Custom date range" popover="manual"><div class="custom-fields"><label class="custom-field"><span id="custom-from-label"></span><input id="custom-from" type="date" /></label><label class="custom-field"><span id="custom-to-label"></span><input id="custom-to" type="date" /></label><div class="custom-actions"><button id="custom-cancel" type="button"></button><button id="custom-apply" type="button" class="primary"></button></div></div></div></div></div><div class="legend" id="legend"></div><div class="chart-wrap"><div class="chart"><div class="axis" id="axis"></div><div class="plot" id="plot"></div></div></div><div class="table-wrap"><table class="table"><thead><tr id="table-head"></tr></thead><tbody id="table-body"></tbody><tfoot id="table-foot"></tfoot></table></div></section></div><div class="alert" id="alert" hidden></div><footer class="footer"><span id="coverage"></span><span id="timezone"></span></footer><div class="tip" id="tip" role="status" hidden></div>`);view.append(page);
   const intro=document.createElement('section');intro.id='usage-intro';intro.className='usage-intro';intro.hidden=true;
   setMarkup(intro,'<span class="intro-mark" aria-hidden="true"><svg viewBox="0 -960 960 960"><path d="M480-280q17 0 28.5-11.5T520-320v-160q0-17-11.5-28.5T480-520q-17 0-28.5 11.5T440-480v160q0 17 11.5 28.5T480-280Zm0-320q17 0 28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 28.5T480-600Zm0 520q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z"/></svg></span><div class="intro-copy"><p id="usage-intro-text"></p></div><span id="usage-intro-error" class="intro-error" role="status"></span><button id="usage-intro-done" type="button"></button>');
   page.querySelector('.top').after(intro);
   const $=id=>view.getElementById(id),text=(id,value)=>{if($(id).textContent!==value)$(id).textContent=value;};
   let value=null,rangeMode='30d',year=null,anchorMonth=null,customFrom=null,customTo=null,selectedDate=null,disabledModels=new Set(),lastKey='',busy=false,opener=null;
   let disposed=false,refreshMotion=null,refreshDelay=null,finishRefresh=null,accountKey=null,tipTarget=null,tipModel=null;
+  let updateState={state:'idle'},updateBusy=false,updateTimer=null;
   const zh=()=>language.language==='zh-CN'||language.language==='zh-TW',tw=()=>language.language==='zh-TW',w=(cn,en,twText)=>(tw()&&twText!==undefined)?twText:(zh()?cn:en);
   const EFFORT_PAREN_RE=/\s*\((?:x?high|medium|med|low|minimal|none|thinking|adaptive|reasoning|fast|default)\)\s*$/i;
   const EFFORT_SLUG_RE=/(?:-(?:n|a|b|trial|x?high|medium|med|low|minimal|none|thinking|adaptive|reasoning|fast|tiered|control|exp(?:-[a-z0-9]+)?|\d{8}))+$/i;
@@ -381,6 +393,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   }
   function render(){
     renderGuide();
+    renderUpdate();
     if(!value){
       closeMenus();$('tip').hidden=true;$('usage-content').hidden=true;$('usage-waiting').hidden=false;
       text('usage-waiting',w('正在连接统计…','Connecting…','正在連線統計資料…'));text('subtitle',w('连接本机统计','Connecting local data','連線本機統計'));text('coverage','');text('timezone','');$('alert').hidden=true;
@@ -483,6 +496,103 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   const customMenu=bindMenu($('custom-preset'),$('custom-menu'),{listbox:false,onBeforeOpen:()=>{
     if(!value)return;$('custom-from').value=customFrom||add(value.today,-29);$('custom-to').value=customTo||value.today;
   }});
+  const updateMenu=bindMenu($('update-btn'),$('update-menu'),{listbox:false});
+  function formatBytes(n){return n>=1048576?`${(n/1048576).toFixed(1)} MB`:n>=1024?`${Math.round(n/1024)} KB`:`${n} B`;}
+  function stopUpdatePoll(){clearInterval(updateTimer);updateTimer=null;}
+  function renderUpdate(){
+    const btn=$('update-btn'),dot=$('update-dot');
+    if(!btn)return;
+    const s=updateState||{state:'idle'},st=s.state||'idle',hasNew=st==='available'||st==='installed';
+    if(dot)dot.hidden=!hasNew;
+    btn.hidden=typeof onUpdate!=='function'&&!s.currentVersion&&st==='idle';
+    const tipTitle=hasNew?w('发现新版本 · 点击查看更新','Update available · Click to update','發現新版本 · 點擊查看更新'):w('检查插件更新','Check for updates','檢查外掛更新');
+    btn.setAttribute('aria-label',tipTitle);btn.title=tipTitle;
+    $('update-menu').setAttribute('aria-label',w('插件更新','Plugin update','外掛更新'));
+    const statusMap={
+      idle:w('检查更新','Check for updates','檢查更新'),
+      checking:w('正在检查更新…','Checking for updates…','正在檢查更新…'),
+      current:w('已是最新版本','You’re up to date','已是最新版本'),
+      available:w(`发现新版本 v${s.latestVersion||''}`,`Update available: v${s.latestVersion||''}`,`發現新版本 v${s.latestVersion||''}`),
+      installing:w('正在下载并安装…','Downloading and installing…','正在下載並安裝…'),
+      installed:w('更新已安装，需要重载','Update installed; reload required','更新已安裝，需要重新載入'),
+      reloading:w('正在重新加载插件…','Reloading plugin…','正在重新載入外掛…'),
+      error:w('更新检查或安装失败','Update incomplete','更新未完成'),
+    };
+    text('upd-status',statusMap[st]||statusMap.error);
+    text('upd-cur-lbl',w('当前版本','Installed','目前版本'));
+    text('upd-lat-lbl',w('最新版本','Latest','最新版本'));
+    text('upd-cur',s.currentVersion?'v'+s.currentVersion:'—');
+    text('upd-lat',s.latestVersion?'v'+s.latestVersion:'—');
+    const prog=s.progress||{},inProg=['checking','installing','reloading'].includes(st);
+    const progWrap=$('upd-prog-wrap');progWrap.hidden=!inProg;
+    if(inProg){
+      const phaseLabels={
+        check:w('连接 GitHub…','Checking GitHub…','連線至 GitHub…'),
+        verify:w('校验签名与安装包…','Verifying package…','驗證安裝套件…'),
+        download:w('正在下载…','Downloading…','正在下載…'),
+        extract:w('正在解压…','Extracting…','正在解壓縮…'),
+        backup:w('备份当前版本…','Backing up…','備份目前版本…'),
+        install:w('写入更新文件…','Installing…','寫入更新檔案…'),
+        recover:w('正在恢复备份…','Restoring backup…','正在還原備份…'),
+        complete:w('完成','Complete','完成'),
+      };
+      text('upd-prog-lbl',phaseLabels[prog.phase]||statusMap[st]);
+      const known=prog.phase==='download'&&Number.isSafeInteger(prog.total)&&prog.total>0&&Number.isSafeInteger(prog.received)&&prog.received>=0;
+      progWrap.dataset.indeterminate=known?'false':'true';
+      text('upd-prog-val',known?`${Math.min(100,Math.round(prog.received/prog.total*100))}% · ${formatBytes(prog.received)}/${formatBytes(prog.total)}`:'');
+      $('upd-prog-fill').style.setProperty('transform',known?`scaleX(${Math.max(0.02,Math.min(1,prog.received/prog.total))})`:'');
+    }
+    const notesText=(s.notes||'').split(/\r?\n/).map(l=>l.trim()).filter(l=>l&&!l.startsWith('#')).slice(0,3).join('\n');
+    $('upd-notes').hidden=st!=='available'||!notesText;text('upd-notes',notesText);
+    const errMap={
+      network:w('网络请求失败，请检查代理或网络','Connection failed. Check network/proxy.','網路連線失敗，請檢查代理或網路'),
+      python:w('未找到可用的 Python 3.10+','Python 3.10+ is required.','需要 Python 3.10+'),
+      verification:w('安装包校验未通过','Package verification failed.','安裝套件驗證未通過'),
+      location:w('插件安装目录校验未通过','Plugin location mismatch.','外掛安裝目錄驗證未通過'),
+      busy:w('已有更新正在进行中','Another update is in progress.','已有更新正在進行中'),
+      install:w('安装确认失败，请重试','Installation could not be confirmed.','未能確認安裝完成'),
+      rollback:w('更新失败且已自动回滚','Update failed and rolled back.','更新失敗且已還原'),
+      timeout:w('连接 GitHub 超时，请稍后重试','Request timed out.','連線逾時'),
+      dns:w('无法解析 GitHub 地址','Could not resolve GitHub.','無法解析 GitHub 位址'),
+      certificate:w('HTTPS 证书校验失败','Certificate verification failed.','憑證驗證失敗'),
+      proxy:w('代理连接失败','Proxy connection failed.','代理連線失敗'),
+      http:w('GitHub 下载请求被拒绝','GitHub rejected the download.','GitHub 拒絕下載'),
+      connection:w('下载连接中断','Download interrupted.','下載連線中斷'),
+      permission:w('插件目录被占用或无写入权限','Plugin directory locked or unwritable.','外掛目錄被占用或無寫入權限'),
+      'python-version':w('需要 Python 3.10 或更高版本','Python 3.10+ is required.','需要 Python 3.10 或更新版本'),
+      'python-missing':w('未找到 Python，无法在线安装','Python 3.10+ was not found.','找不到可用的 Python'),
+      'install-location':w('插件路径校验失败（不支持符号链接）','Plugin path validation failed.','外掛路徑驗證失敗'),
+      'plan-expired':w('更新信息已过期，请重新检查','Update plan expired; check again.','更新資訊已過期，請重新檢查'),
+    };
+    const fb=st==='error'?(errMap[s.errorDetail]||errMap[s.error]||errMap.network):st==='available'?w('保留当前设置与统计数据','Settings & history preserved','保留現有設定與統計資料'):st==='installed'?w('点击重载后即可生效','Reload to activate new version','點擊重新載入即可生效'):w('自动后台检查已开启','Auto-check enabled','已開啟自動檢查');
+    text('upd-feedback',fb);
+    const act=$('upd-action');
+    act.hidden=inProg;act.disabled=updateBusy||inProg||typeof onUpdate!=='function';
+    act.className=(st==='available'||st==='installed')?'primary':'';
+    text('upd-action',st==='available'?w('立即更新','Update now','立即更新'):st==='installed'?w('重新加载插件','Reload plugin','重新載入外掛'):st==='error'?w('重试','Retry','重試'):w('检查更新','Check now','檢查更新'));
+    if(updateMenu.isOpen()&&inProg){if(!updateTimer)updateTimer=setInterval(()=>void sendUpdate({action:'status'}),300);}
+    else stopUpdatePoll();
+  }
+  async function sendUpdate(payload){
+    if(disposed||typeof onUpdate!=='function')return;
+    const isStatus=payload?.action==='status';
+    if(!isStatus)updateBusy=true;
+    try{const next=await onUpdate(payload);if(!disposed&&next&&typeof next==='object')updateState=next;}
+    catch{if(!disposed&&!isStatus)updateState={...updateState,state:'error',error:'network'};}
+    finally{if(!isStatus)updateBusy=false;if(!disposed)renderUpdate();}
+  }
+  $('update-btn').addEventListener('click',()=>{
+    if(updateMenu.isOpen()){updateMenu.close();return;}
+    updateMenu.open();renderUpdate();
+    if(['idle','current','error'].includes(updateState?.state||'idle'))void sendUpdate({action:'check'});
+  });
+  $('upd-action').addEventListener('click',()=>{
+    if(updateBusy||disposed)return;
+    const st=updateState?.state||'idle';
+    if(st==='available'&&updateState.latestVersion)void sendUpdate({action:'apply',version:updateState.latestVersion});
+    else if(st==='installed')void sendUpdate({action:'reload'});
+    else void sendUpdate({action:'check'});
+  });
   const closeYear=(restore=true)=>yearMenu.close(restore);
   const closeMonth=(restore=true)=>monthMenu.close(restore);
   const closeCustom=(restore=true)=>customMenu.close(restore);
@@ -551,7 +661,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   function conceal(){
     if(dialog.matches(':popover-open'))dialog.hidePopover();dialog.removeAttribute('open');
   }
-  function close(){languagePicker.close(false);closeMenus();conceal();$('tip').hidden=true;opener?.focus({preventScroll:true});}
+  function close(){languagePicker.close(false);stopUpdatePoll();closeMenus();conceal();$('tip').hidden=true;opener?.focus({preventScroll:true});}
   $('close').addEventListener('click',close);dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close();}});
   const contentKey=data=>JSON.stringify([{...data,updatedAt:undefined},language.language,themeSignature()]);
   const within=event=>event.composedPath().includes(dialog);
@@ -565,8 +675,8 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     }
     if(event.key!=='Tab')return;
     for(const m of menus)if(m.listbox&&m.isOpen())m.close(false);
-    if(customMenu.isOpen()){
-      const box=[...$('custom-menu').querySelectorAll('input,button')].filter(n=>!n.disabled);
+    if(customMenu.isOpen()||updateMenu.isOpen()){
+      const box=[...(customMenu.isOpen()?$('custom-menu'):$('update-menu')).querySelectorAll('input,button')].filter(n=>!n.disabled&&!n.hidden);
       if(box.length){
         const i=box.indexOf(view.activeElement);
         if(i<0||event.shiftKey&&i===0||!event.shiftKey&&i===box.length-1){event.preventDefault();event.stopImmediatePropagation();(event.shiftKey?box.at(-1):box[0]).focus({preventScroll:true});}
@@ -594,8 +704,8 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   // theme change, rather than waiting for the next metrics poll.
   const themeObserver=new MutationObserver(()=>{if(!disposed&&value&&dialog.open){const key=contentKey(value);if(key!==lastKey){lastKey=key;render();}}});
   if(root.host)themeObserver.observe(root.host,{attributes:true,attributeFilter:['data-pulse-theme','style']});
-  return {open(data,trigger){if(!data||disposed)return;accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();},
-    update(data){if(disposed)return;if(!data){if(!value)return;value=null;lastKey='';if(dialog.open)render();return;}if(accountKey&&accountKey!==data.accountKey){selectedDate=null;disabledModels.clear();year=data.today.slice(0,4);anchorMonth=data.today.slice(0,7);const d30=add(data.today,-29);customFrom=data.firstDate&&d30<data.firstDate?data.firstDate:d30;customTo=data.today;}accountKey=data.accountKey;value=normalizeUsage(data);if(!dialog.open)return;const key=contentKey(data);if(key===lastKey)return;lastKey=key;render();},
+  return {open(data,trigger,nextUpdate){if(nextUpdate!==undefined)updateState=nextUpdate;if(!data||disposed)return;accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();},
+    update(data,nextUpdate){if(disposed)return;if(nextUpdate!==undefined){updateState=nextUpdate;renderUpdate();}if(!data){if(!value)return;value=null;lastKey='';if(dialog.open)render();return;}if(accountKey&&accountKey!==data.accountKey){selectedDate=null;disabledModels.clear();year=data.today.slice(0,4);anchorMonth=data.today.slice(0,7);const d30=add(data.today,-29);customFrom=data.firstDate&&d30<data.firstDate?data.firstDate:d30;customTo=data.today;}accountKey=data.accountKey;value=normalizeUsage(data);if(!dialog.open)return;const key=contentKey(data);if(key===lastKey)return;lastKey=key;render();},
     restoreModal(){if(!disposed&&dialog.open&&dialog.isConnected&&!dialog.matches(':popover-open')){closeMenus();present();}},
-    close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;languagePicker.dispose();themeObserver.disconnect();clearTimeout(refreshDelay);finishRefresh?.();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};
+    close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();languagePicker.dispose();themeObserver.disconnect();clearTimeout(refreshDelay);finishRefresh?.();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};
 };

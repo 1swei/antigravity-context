@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package release zip and SHA-256
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="antigravity-context-${VERSION}.zip"
+          mkdir -p "dist/antigravity-context"
+          cp -r assets compat docs sidecars plugin.json LICENSE README.md README.en.md CHANGELOG.md CHANGELOG.en.md "dist/antigravity-context/"
+          find "dist/antigravity-context" -name "__pycache__" -type d -exec rm -rf {} +
+          (cd dist && zip -rq "../${ARCHIVE}" antigravity-context)
+          sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            antigravity-context-*.zip
+            antigravity-context-*.zip.sha256

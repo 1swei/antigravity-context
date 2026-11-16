@@ -43,7 +43,8 @@ Click "View usage stats" to open the standalone analytics modal featuring unifie
 
 - **Inline Context Bar**: Real-time context window occupancy (`0` / `0%` on empty new conversations), prioritizing server-reported actual tokens from the latest request, with compaction-aware recalculation and overflow alerts.
 - **Unified Single-Page Usage Analytics**: Aggregates local desktop history with cross-conversation deduplication, yearly contribution heatmap, per-model stacked bar chart, and a 9-column model breakdown table with interactive month/day drilldown.
-- **Headless Background Sidecar**: Removed the redundant right-side auxiliary pane web dashboard (`has_web_ui: false`); runs solely as a headless background collector + local CDP inline injector with in-app update checks disabled (`updater: null`).
+- **Headless Background Sidecar**: Removed the redundant right-side auxiliary pane web dashboard (`has_web_ui: false`); runs purely as a headless background collector and local CDP inline injector.
+- **Auto Update Check & Online Install**: Automatically checks GitHub Releases silently on startup and every 6 hours; displays a **red dot badge** on the top-right update button of the usage analytics modal (and on the modal entry link) when a new release is available, with SHA-256 verified online download, atomic install, and reload (requires Python 3.10+).
 - **Host-Adaptive Theme & Multilingual UI**: Dynamically mirrors Antigravity light/dark CSS variables and fonts; supports instant switching between **English, Simplified Chinese (`zh-CN`), and Traditional Chinese (`zh-TW`)**.
 - **Cross-Platform**: Works on Windows, macOS, and Linux.
 
@@ -86,7 +87,7 @@ This project is a derivative fork based on the MIT-licensed `antigrative-dashboa
 
 ### Major Changes in v1.0.0
 - Removed the right-side auxiliary pane web dashboard (`has_web_ui: false`, `ui_config` and panel web assets removed) and updated `sidecars/panel/main.mjs` to run as a headless background collector + inline CDP injector.
-- Removed quota-group UI blocks and the in-app auto-updater trigger.
+- Removed quota-group UI blocks and upgraded the updater with automatic background checks, top-right red-dot alerts in the usage modal, and verified online installation.
 - Calibrated context window occupancy (latest request actual server usage priority), transcript parsing (post-compaction filtering, undo/revision handling), and usage ledger deduplication.
 - Consolidated the Token usage modal onto a single page with unified date filters (`7d`, `30d`, `month`, `year`, `custom`) and cross-linked heatmap/chart drilldown.
 - Adapted inline widget and modal themes dynamically to host Antigravity light/dark CSS variables and fonts, and updated branding to **Antigravity Context** with a redesigned vector icon.

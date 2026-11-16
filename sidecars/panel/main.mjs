@@ -38,7 +38,8 @@ const metrics = async input => {
   if(ownership&&!await ownership.isOwner())throw Error('Sidecar ownership changed');
   runtimeSettings();
   const base=await store.snapshot(input);if(input?.usageSync===true)void usage.sync(true);
-  return {...base,usage:await usage.snapshot({sync:input?.usageSync===true}),preferences:await preferences.snapshot(),theme:await readHostTheme(),integration:integration.health};
+  const update=typeof updater.publicState==='function'?updater.publicState():null;
+  return {...base,usage:await usage.snapshot({sync:input?.usageSync===true}),preferences:await preferences.snapshot(),theme:await readHostTheme(),integration:integration.health,...(update?{update}:{})};
 };
 const usageSource=()=>{const s=readFileSync(join(HERE,'..','..','compat','usage-ui.cjs'),'utf8');return `window.__agPulseUsageFactory=(${s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'')});`;};
 const inlineSource=()=>{
@@ -60,7 +61,7 @@ const integration = new RuntimeUi({
   // only; SDK/HTTP panels keep the store's automatic most-recent selection.
   snapshot: input => metrics({...input,selectLatest:false}),
   preferences,
-  updater: null,
+  updater,
   owner:ownership?.token,owns:()=>ownership?ownership.isOwner():true,
   source: makeRendererSource(readFileSync(join(HERE,'..','..','compat','i18n.cjs'),'utf8'),readFileSync(join(HERE,'..','..','compat','inline-widget.cjs'),'utf8'),readFileSync(join(HERE,'..','..','compat','theme.cjs'),'utf8'),ownership?.token,ownership?.startedAt,usageSource()),
   dataDir: paths.data,
@@ -70,7 +71,14 @@ const integration = new RuntimeUi({
 if (isHostSidecar) {
   if(!await ownership.claim())process.exit(0);
   integration.start();
+  // Automatic background update check on startup and every 6 hours.
+  let startupUpdateTimer=null,periodicUpdateTimer=null;
+  const runAutoUpdateCheck=()=>{if(typeof updater.check==='function')void updater.check({silent:true}).catch(()=>{});};
+  if(typeof updater.current==='function')void updater.current().then(v=>{if(updater.state&&!updater.state.currentVersion)updater.state={...updater.state,currentVersion:v};}).catch(()=>{});
+  startupUpdateTimer=setTimeout(runAutoUpdateCheck,5000);startupUpdateTimer.unref?.();
+  periodicUpdateTimer=setInterval(runAutoUpdateCheck,6*60*60*1000);periodicUpdateTimer.unref?.();
   const shutdown=async()=>{
+    clearTimeout(startupUpdateTimer);clearInterval(periodicUpdateTimer);
     usage.dispose();store.dispose();
     const exitTimer=setTimeout(()=>process.exit(0),2000);exitTimer.unref();
     await integration.stop();ownership.stop();process.exit(0);

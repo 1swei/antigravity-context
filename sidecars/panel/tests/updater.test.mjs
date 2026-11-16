@@ -246,3 +246,16 @@ test('an uncertain outcome after committing never reruns installation and a fres
  const checked=await fixture.service.check();assert.equal(checked.state,'current');assert.equal(checked.currentVersion,'0.8.7');assert.equal(applies,1);
  assert.deepEqual((await readdir(fixture.service.dataDir)).filter(name=>name.startsWith('plan-')),[]);
 });
+
+test('silent background check preserves idle and available states on transient failure',async t=>{
+ let fail=true;
+ const {service}=await setup(t,async()=>{if(fail)throw Error('network');return {host:'app',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true};});
+ const first=await service.check({silent:true});
+ assert.equal(first.state,'idle');
+ fail=false;
+ const found=await service.check({silent:true});
+ assert.equal(found.state,'available');assert.equal(found.latestVersion,'0.8.7');
+ fail=true;
+ const stillAvailable=await service.check({silent:true});
+ assert.equal(stillAvailable.state,'available');
+});

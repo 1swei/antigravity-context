@@ -138,7 +138,7 @@ test('theme adapter adopts Antigravity translucent borders, primary accent, and 
   }
 });
 
-test('main entrypoint disables Check for Updates UI in both inline and runtime bridges', () => {
+test('main entrypoint enables updater in runtime bridge and exposes update state in snapshot', () => {
   const mainUrl = new URL('../main.mjs', import.meta.url).href;
   const probe = `
     import assert from 'node:assert/strict';
@@ -156,8 +156,8 @@ test('main entrypoint disables Check for Updates UI in both inline and runtime b
       'node:fs': { readFileSync: f => String(f).endsWith('.cjs') ? 'module.exports = function() {};' : '{}' },
       'node:http': { createServer() { return { listen() {} }; } },
       'node:module': { createRequire: () => () => ({ css: () => '' }) },
-      'store.mjs': { MetricsStore: class { dispose() {} } },
-      'usage.mjs': { DesktopUsage: class { dispose() {} }, UsageLedger: class {} },
+      'store.mjs': { MetricsStore: class { async snapshot() { return { connection: 'live' }; } dispose() {} } },
+      'usage.mjs': { DesktopUsage: class { async snapshot() { return {}; } dispose() {} }, UsageLedger: class {} },
       'runtime-ui.mjs': {
         RuntimeUi: class { health = {}; constructor(opts) { captured.runtimeOpts = opts; } },
         makeRendererSource: (_i18n, _widget, _theme, _token, _startedAt, prelude) => {
@@ -169,7 +169,7 @@ test('main entrypoint disables Check for Updates UI in both inline and runtime b
       'preferences.mjs': { PreferencesStore: class { async snapshot() { return {}; } } },
       'sidecar-owner.mjs': { SidecarOwner: class { token = 't'; startedAt = 1; } },
       'host-theme.mjs': { readHostTheme: async () => ({}) },
-      'updater.mjs': { AppUpdater: class {}, releaseRuntimeDirectory() {} },
+      'updater.mjs': { AppUpdater: class { publicState() { return { state: 'available', currentVersion: '1.0.0', latestVersion: '1.0.1' }; } }, releaseRuntimeDirectory() {} },
     };
     const entry = new SourceTextModule(readFileSync(new URL(${JSON.stringify(mainUrl)}), 'utf8'), {
       context, identifier: ${JSON.stringify(mainUrl)}, initializeImportMeta(m) { m.url = ${JSON.stringify(mainUrl)}; },
@@ -182,9 +182,11 @@ test('main entrypoint disables Check for Updates UI in both inline and runtime b
       }, { context });
     });
     await entry.evaluate();
-    assert.equal(captured.runtimeOpts.updater, null);
+    assert.ok(captured.runtimeOpts.updater && typeof captured.runtimeOpts.updater.publicState === 'function');
     assert.ok(!captured.prelude.includes('__agPulseUpdateFactory'));
     assert.ok(captured.prelude.includes('__agPulseUsageFactory'));
+    const snap = await captured.runtimeOpts.snapshot({});
+    assert.deepEqual(snap.update, { state: 'available', currentVersion: '1.0.0', latestVersion: '1.0.1' });
   `;
   const run = spawnSync(process.execPath, ['--experimental-vm-modules', '--input-type=module', '-e', probe], {
     cwd: ROOT, encoding: 'utf8',
@@ -1099,6 +1101,161 @@ test('usage-ui removes weekly/composition views and coordinates unified date fil
       ['Gemini 3.7 Flash'],
     );
 
+    dash.dispose();
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.window = prevWin;
+    globalThis.getComputedStyle = prevComputed;
+    globalThis.MutationObserver = prevMO;
+  }
+});
+
+test('usage-ui header update button shows red dot on available update and supports online apply/reload', async () => {
+  const createUsageDashboard = require('../../../compat/usage-ui.cjs');
+  const createI18n = require('../../../compat/i18n.cjs');
+  const idMap = new Map();
+  let doc = null;
+  const makeEl = tag => {
+    const attrs = new Map();
+    const listeners = new Map();
+    let _id = '';
+    const el = {
+      tagName: String(tag || 'div').toUpperCase(),
+      get id() { return _id; },
+      set id(v) { _id = String(v || ''); if (_id) idMap.set(_id, el); },
+      get ownerDocument() { return doc; },
+      parentNode: null,
+      parentElement: null,
+      hidden: false,
+      disabled: false,
+      open: false,
+      tabIndex: 0,
+      dataset: {},
+      textContent: '',
+      innerHTML: '',
+      title: '',
+      isConnected: true,
+      children: [],
+      style: makeStyleStore(),
+      attributes: attrs,
+      firstElementChild: null,
+      get lastElementChild() { return el.children.at(-1) ?? null; },
+      setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
+      getAttribute(k) { return attrs.get(k) ?? null; },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      append(...nodes) {
+        for (const n of nodes) if (n && typeof n === 'object') { n.parentElement = el; n.parentNode = el; el.children.push(n); }
+        el.firstElementChild = el.children.find(c => c.tagName) ?? null;
+      },
+      before() {},
+      after() {},
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      remove() {},
+      closest: () => null,
+      matches: () => false,
+      showPopover() { el.open = true; },
+      hidePopover() { el.open = false; },
+      focus() {},
+      animate: () => ({ cancel() {} }),
+      addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
+      removeEventListener() {},
+      dispatch(type) { for (const fn of listeners.get(type) || []) fn({ target: el, preventDefault() {}, stopPropagation() {} }); },
+      getClientRects: () => [{ width: 20, height: 20 }],
+      getBoundingClientRect: () => ({ left: 0, top: 0, right: 600, bottom: 400, width: 600, height: 400 }),
+      querySelector(sel) { return el.querySelectorAll(sel)[0] ?? null; },
+      querySelectorAll(sel) {
+        const list = [];
+        const walk = node => { for (const c of node.children || []) { list.push(c); walk(c); } };
+        walk(el);
+        const parts = sel.split(',').map(p => p.trim());
+        return list.filter(n => parts.some(p => {
+          if (p.startsWith('.')) return String(n.className || '').split(/\s+/).includes(p.slice(1));
+          const m = p.match(/^\[([a-z-]+)\]$/);
+          if (m) return n.attributes?.has(m[1]);
+          return n.tagName === p.toUpperCase();
+        }));
+      },
+      attachShadow() {
+        const sr = makeEl('shadow');
+        sr.getElementById = id => idMap.get(id) ?? null;
+        return sr;
+      },
+    };
+    return el;
+  };
+  doc = {
+    defaultView: { addEventListener() {}, removeEventListener() {}, innerWidth: 1200, innerHeight: 900 },
+    createElement: tag => tag === 'canvas' ? { width: 1, height: 1, getContext: () => makeCanvasContext() } : makeEl(tag),
+    createTextNode: text => ({ textContent: text }),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const prevDoc = globalThis.document, prevWin = globalThis.window, prevComputed = globalThis.getComputedStyle, prevMO = globalThis.MutationObserver;
+  globalThis.document = doc;
+  globalThis.window = { addEventListener() {}, removeEventListener() {}, innerWidth: 1200, innerHeight: 900 };
+  globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  const setMarkup = (target, markup) => {
+    target.innerHTML = markup;
+    target.children = [];
+    const stack = [target];
+    const voidTags = new Set(['path', 'i', 'br']);
+    for (const m of markup.matchAll(/<\/?([a-z0-9-]+)\b([^>]*)>/gi)) {
+      const full = m[0], tag = m[1].toLowerCase(), rawAttrs = m[2];
+      if (full.startsWith('</')) { if (stack.length > 1) stack.pop(); continue; }
+      const n = makeEl(tag);
+      for (const a of rawAttrs.matchAll(/([a-z0-9-]+)(?:="([^"]*)")?/gi)) {
+        const k = a[1], v = a[2] ?? '';
+        n.setAttribute(k, v);
+        if (k === 'class') n.className = v;
+        if (k === 'hidden') n.hidden = true;
+      }
+      stack.at(-1).append(n);
+      if (!full.endsWith('/>') && !voidTags.has(tag)) stack.push(n);
+    }
+  };
+
+  const calls = [];
+  try {
+    const root = makeEl('div');
+    const dash = createUsageDashboard({
+      root,
+      language: createI18n('zh-CN'),
+      setMarkup,
+      guideDismissed: true,
+      onDismissGuide: async () => {},
+      onLanguage: async () => {},
+      onRefresh: async () => {},
+      onUpdate: async input => {
+        calls.push(input);
+        if (input.action === 'apply') return { state: 'installed', currentVersion: '1.0.1', latestVersion: '1.0.1' };
+        if (input.action === 'reload') return { state: 'reloading', currentVersion: '1.0.1', latestVersion: '1.0.1' };
+        return { state: 'available', currentVersion: '1.0.0', latestVersion: '1.0.1', notes: 'Bug fixes' };
+      },
+    });
+    const usageData = { today: '2026-11-16', firstDate: '2026-11-16', timeZone: 'Asia/Shanghai', requests: 1, models: [], days: [] };
+    dash.open(usageData, null, { state: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' });
+    assert.equal(idMap.get('update-dot').hidden, true);
+
+    dash.update(usageData, { state: 'available', currentVersion: '1.0.0', latestVersion: '1.0.1', notes: 'Fix bug' });
+    assert.equal(idMap.get('update-dot').hidden, false);
+
+    idMap.get('update-btn').dispatch('click');
+    assert.equal(idMap.get('update-menu').open, true);
+    assert.equal(idMap.get('upd-cur').textContent, 'v1.0.0');
+    assert.equal(idMap.get('upd-lat').textContent, 'v1.0.1');
+    assert.equal(idMap.get('upd-action').textContent, '立即更新');
+
+    idMap.get('upd-action').dispatch('click');
+    await new Promise(r => setImmediate(r));
+    assert.deepEqual(calls[0], { action: 'apply', version: '1.0.1' });
+    assert.equal(idMap.get('upd-action').textContent, '重新加载插件');
+    assert.equal(idMap.get('update-dot').hidden, false);
+
+    idMap.get('upd-action').dispatch('click');
+    await new Promise(r => setImmediate(r));
+    assert.deepEqual(calls[1], { action: 'reload' });
     dash.dispose();
   } finally {
     globalThis.document = prevDoc;

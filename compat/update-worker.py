@@ -29,7 +29,9 @@ _lock_spec.loader.exec_module(_lock_module)
 lifecycle_lock, linked = _lock_module.lifecycle_lock, _lock_module.linked
 
 REPO = '1swei/antigravity-context'
-RUNTIME = ('assets', 'compat', 'sidecars', 'plugin.json')
+DOC_FILES = ('plugin.json', 'LICENSE', 'README.md', 'README.en.md', 'CHANGELOG.md', 'CHANGELOG.en.md')
+RUNTIME_DIRS = ('assets', 'compat', 'docs', 'sidecars')
+RUNTIME = RUNTIME_DIRS + DOC_FILES
 class RollbackError(RuntimeError):
     pass
 
@@ -214,7 +216,7 @@ def _fetch(url, limit, destination, metadata, method, progress, deadline):
         parsed = urllib.parse.urlsplit(url)
         if parsed.scheme != 'https' or parsed.hostname not in allowed or parsed.username or parsed.password or parsed.port not in (None, 443):
             raise ValueError('Untrusted update URL')
-        req = urllib.request.Request(url, headers={'User-Agent': 'Antigrative-Dashboard-Updater', 'Accept': 'application/vnd.github+json'}, method=method)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Antigravity-Context-Updater', 'Accept': 'application/vnd.github+json'}, method=method)
         try:
             response = open_verified(req)
         except urllib.error.HTTPError as error:
@@ -279,7 +281,7 @@ def public_release(current, deadline=None):
     if version(latest) <= version(current):
         return release
     content = html.unescape(fetch(f'https://github.com/{REPO}/releases/expanded_assets/v{latest}', 1048576, deadline=deadline).decode('utf-8'))
-    name = f'antigrative-dashboard-{latest}.zip'
+    name = f'antigravity-context-{latest}.zip'
     base = f'https://github.com/{REPO}/releases/download/v{latest}/'
     for filename in (name, name + '.sha256'):
         path = f'/{REPO}/releases/download/v{latest}/{filename}'
@@ -303,7 +305,7 @@ def release_plan(release, current, host='app'):
     result = {'currentVersion': current, 'latestVersion': latest, 'host': 'app', 'hasUpdate': newer}
     if not newer:
         return result
-    name = f'antigrative-dashboard-{latest}.zip'
+    name = f'antigravity-context-{latest}.zip'
     assets = release.get('assets', [])
     matched = [a for a in assets if a.get('name') == name]
     hashes = [a for a in assets if a.get('name') == name + '.sha256']
@@ -331,6 +333,8 @@ def latest_release(current):
                                 deadline=min(deadline, time.monotonic() + API_BUDGET)))
     except (urllib.error.HTTPError, NetworkError) as error:
         status = error.code if isinstance(error, urllib.error.HTTPError) else error.status
+        if status == 404:
+            return {'tag_name': 'v' + current, 'assets': []}
         if status is not None and status not in (403, 429):
             raise
         initial_error = error
@@ -398,9 +402,12 @@ def stage_archive(archive, stage, expected_version):
             mode = entry.external_attr >> 16
             if stat.S_ISLNK(mode) or stat.S_IFMT(mode) not in (0, stat.S_IFREG, stat.S_IFDIR):
                 raise ValueError('Unsupported archive entry')
-            if parts[0] != 'antigrative-dashboard':
+            if parts[0] in ('antigravity-context', f'antigravity-context-{expected_version}'):
+                relative = parts[1:]
+            elif parts[0] in RUNTIME:
+                relative = parts
+            else:
                 raise ValueError('Unexpected archive root')
-            relative = parts[1:]
             if not relative or relative[0] not in RUNTIME or entry.is_dir():
                 continue
             if any(part in PRIVATE for part in relative):
@@ -467,7 +474,7 @@ def file_inventory(value):
                 '\\' in name or ':' in name or any(p in ('.', '..') or p.lower() in PRIVATE or
                 p.rstrip(' .') != p or p.split('.')[0].upper() in reserved or
                 re.search(r'[\x00-\x1f<>"|?*]', p) for p in parts) or
-                not (name == 'plugin.json' or len(parts) > 1 and parts[0] in RUNTIME[:3])):
+                not (name in DOC_FILES or len(parts) > 1 and parts[0] in RUNTIME_DIRS)):
             raise ValueError('Invalid update file path')
         key = name.casefold()
         if key in seen:
@@ -782,7 +789,7 @@ def perform(plan, target, updates, progress=None):
         raise LocationError('Update directory overlaps managed paths')
     # Reconstruct and validate the plan rather than trusting persisted URLs.
     latest = plan['latestVersion']
-    name = f'antigrative-dashboard-{latest}.zip'
+    name = f'antigravity-context-{latest}.zip'
     base = f'https://github.com/{REPO}/releases/download/v{latest}/'
     if plan.get('host') != 'app' or plan.get('currentVersion') != current or plan.get('name') != name or plan.get('url') != base + name or plan.get('checksumUrl') != base + name + '.sha256' or version(latest) <= version(current):
         raise ValueError('Update plan is stale or invalid')

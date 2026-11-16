@@ -92,19 +92,26 @@ export class AppUpdater{
  state={state:'idle',host:'app',currentVersion:null};plan=null;checkPending=null;applyPending=null;job=null;lastCheck=0;
  publicState(){const {state,host,currentVersion,latestVersion,notes,error,errorDetail,progress}=this.state;return {state,host,currentVersion,latestVersion,notes,error,errorDetail,progress};}
  async current(){const m=JSON.parse(await readFile(join(this.pluginDir,'plugin.json'),'utf8'));if(m.name!=='antigravity-context'||!/^\d+\.\d+\.\d+$/.test(m.version))throw Error('verification');return m.version;}
- async check(){
+ async check({silent=false}={}){
   if(this.job||this.applyPending||['installed','reloading'].includes(this.state.state))return this.publicState();if(this.checkPending)return this.checkPending;
   if(this.lastCheck&&this.now()-this.lastCheck<15000&&['current','available'].includes(this.state.state))return this.publicState();
+  const prior=this.state;
   this.checkPending=(async()=>{
-   this.state={state:'checking',host:'app',currentVersion:null,progress:{phase:'check'}};this.plan=null;
+   if(!silent)this.state={state:'checking',host:'app',currentVersion:prior.currentVersion??null,progress:{phase:'check'}};
+   if(!silent)this.plan=null;
    try{
-    this.state.currentVersion=await this.current();
+    const currentVersion=await this.current();
+    if(!silent)this.state.currentVersion=currentVersion;
     const result=await this.run(this.worker,['check','--target',this.pluginDir]);
-    if(result.host!=='app'||result.currentVersion!==this.state.currentVersion)throw Error('verification');
+    if(result.host!=='app'||result.currentVersion!==currentVersion)throw Error('verification');
     this.plan=result.hasUpdate?{...result,expires:this.now()+15*60*1000}:null;
     this.state={state:result.hasUpdate?'available':'current',host:'app',currentVersion:result.currentVersion,latestVersion:result.latestVersion,notes:typeof result.notes==='string'?result.notes.slice(0,1800):''};
-   }catch(error){this.state={...this.state,state:'error',error:safeCode(error.message),errorDetail:errorDetail(error)};}
-   this.lastCheck=this.now();return this.publicState();
+    this.lastCheck=this.now();
+   }catch(error){
+    if(silent){this.state={...prior,currentVersion:prior.currentVersion??this.state.currentVersion??null};}
+    else{this.state={...this.state,state:'error',error:safeCode(error.message),errorDetail:errorDetail(error)};this.lastCheck=this.now();}
+   }
+   return this.publicState();
   })().finally(()=>{this.checkPending=null;});return this.checkPending;
  }
  async apply(version){
