@@ -3,8 +3,17 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.4` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.5` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-16`
+
+---
+
+## v1.0.5 (`2026-11-16`)
+
+- **Smart Background Sync on Open & Refresh**: Unified opening the usage modal and clicking manual refresh behind `syncSmart()`—automatically running a full historical import before a backfill checkpoint exists, and fast incremental verification thereafter.
+- **Flush Top-Edge Real Progress Bar & Continuous Refresh Spin**: Added a 60fps `requestAnimationFrame` theme-accented progress bar flush with the top edge of the usage modal card, kept the refresh icon spinning until sync genuinely finishes, removed technical "full/incremental" labels and the `Asia/Shanghai · ` prefix in favor of clean `Importing data…` / `Local only` copy.
+- **Eliminate Permanent False Alerts & Progress Flicker**: Separated historical `partialRequests` from real unreadable-file/persistence errors so healthy ledgers no longer show a permanent warning banner, suppressed `summaryStale` live-write flashes during chat polling, and removed the redundant activity subtitle.
+- **Performance & First-Load Improvements**: Added stat-validated per-file JSON ledger caching in `UsageLedger.summary()`, added a fast-path in inline `mount()` to skip redundant full-DOM composer scans, bypassed the `1800ms` summary cooldown for unseen conversation IDs, and auto-detected the host OS timezone for daily buckets.
 
 ---
 
