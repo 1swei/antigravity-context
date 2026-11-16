@@ -1332,9 +1332,15 @@ test('usage-ui header update button shows red dot on available update and suppor
     idMap.get('refresh').dispatch('click');
     assert.equal(idMap.get('refresh').disabled, true);
     assert.equal(idMap.get('refresh').getAttribute('aria-busy'), 'true');
+    assert.equal(idMap.get('refresh').dataset.hoverMuted, '1');
     await new Promise(r => setImmediate(r));
     assert.equal(idMap.get('refresh').disabled, false, 'refresh button must unlock immediately when refresh completes');
     assert.equal(idMap.get('refresh').getAttribute('aria-busy'), 'false');
+    idMap.get('refresh').dispatch('pointerenter');
+    assert.equal(idMap.get('action-tip').hidden, true, 'synthetic pointerenter after unlock without pointer movement must not show refresh tip');
+    assert.equal(idMap.get('refresh').dataset.hoverMuted, '1', 'hover background must stay muted until pointer leaves or moves');
+    idMap.get('refresh').dispatch('pointerleave');
+    assert.equal(idMap.get('refresh').dataset.hoverMuted, undefined);
 
     dash.update({ ...usageData, syncing: false, confirmedMissingConversations: 1 });
     assert.equal(idMap.get('alert').hidden, false);

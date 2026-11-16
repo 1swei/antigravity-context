@@ -18,7 +18,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     .actions button{position:relative;display:inline-flex;align-items:center;justify-content:center;height:28px;min-width:28px;padding:0;color:var(--pulse-muted);border-radius:8px}
     .update-dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 1.5px var(--pulse-background);pointer-events:none}.update-dot[hidden]{display:none}
     .actions button#locale{min-width:28px;padding:0 8px;font-size:12px;font-weight:500}
-    .actions button:not([disabled]):hover,.actions button:active:not([disabled]),.actions button[aria-expanded=true]{background:var(--pulse-hover);color:var(--pulse-foreground)}
+    .actions button:not([disabled]):not([data-hover-muted="1"]):hover,.actions button:active:not([disabled]),.actions button[aria-expanded=true]{background:var(--pulse-hover);color:var(--pulse-foreground)}
     .actions svg,.range svg,.menu-chevron,.menu-check,.intro-mark svg{display:block;fill:currentColor;stroke:none;flex:none}
     .actions svg{width:17px;height:17px}
     .locale-label{display:block;line-height:16px;text-align:center;font-size:12px}
@@ -230,14 +230,42 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     const below=rect.bottom+6;
     el.style.top=(below+r.height<=bounds.bottom-12?below:Math.max(bounds.top+12,rect.top-r.height-6))+'px';
   }
+  const mutedActions=new Map();
+  function muteActionTarget(target,event){
+    hideActionTip();
+    if(!target)return;
+    const hasPos=Number.isFinite(event?.clientX)&&Number.isFinite(event?.clientY)&&(event.type==='pointerdown'||event.detail>0||event.clientX>0||event.clientY>0);
+    mutedActions.set(target,hasPos?{x:event.clientX,y:event.clientY}:null);
+    if(target.dataset)target.dataset.hoverMuted='1';
+  }
+  function unmuteActionTarget(target){
+    mutedActions.delete(target);
+    if(target?.dataset)delete target.dataset.hoverMuted;
+  }
+  function clearMutedActions(){for(const t of [...mutedActions.keys()])unmuteActionTarget(t);}
+  view.addEventListener('pointermove',event=>{
+    if(!mutedActions.size||!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return;
+    const path=event.composedPath?.()||[];
+    for(const [t,pos]of [...mutedActions.entries()]){
+      const moved=!pos||Math.hypot(event.clientX-pos.x,event.clientY-pos.y)>=2;
+      const inside=path.includes(t);
+      if(!moved&&inside)continue;
+      if(!moved&&t.disabled){
+        const r=t.getBoundingClientRect?.();
+        if(r&&event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom)continue;
+      }
+      unmuteActionTarget(t);
+      if(inside&&!t.disabled)showActionTip(t);
+    }
+  },{passive:true});
   function bindActionTip(target){
     if(!target)return;
-    target.addEventListener('pointerenter',()=>showActionTip(target));
-    target.addEventListener('pointerleave',()=>{if(actionTipTarget===target)hideActionTip();});
+    target.addEventListener('pointerenter',()=>{if(!mutedActions.has(target))showActionTip(target);});
+    target.addEventListener('pointerleave',()=>{unmuteActionTarget(target);if(actionTipTarget===target)hideActionTip();});
     target.addEventListener('focus',()=>{if(target.matches?.(':focus-visible'))showActionTip(target);});
     target.addEventListener('blur',()=>{if(actionTipTarget===target)hideActionTip();});
-    target.addEventListener('pointerdown',hideActionTip);
-    target.addEventListener('click',hideActionTip);
+    target.addEventListener('pointerdown',event=>muteActionTarget(target,event));
+    target.addEventListener('click',event=>muteActionTarget(target,event));
   }
   function setActionTip(target,label){
     if(!target)return;
@@ -794,7 +822,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   function conceal(){
     if(dialog.matches(':popover-open'))dialog.hidePopover();dialog.removeAttribute('open');
   }
-  function close(){languagePicker.close(false);stopUpdatePoll();closeMenus();finishProgressBar();syncSpinning=false;refreshMotion?.cancel();refreshMotion=null;if(!refreshPending){busy=false;$('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false');}conceal();$('tip').hidden=true;hideActionTip();opener?.focus({preventScroll:true});}
+  function close(){languagePicker.close(false);stopUpdatePoll();closeMenus();finishProgressBar();clearMutedActions();syncSpinning=false;refreshMotion?.cancel();refreshMotion=null;if(!refreshPending){busy=false;$('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false');}conceal();$('tip').hidden=true;hideActionTip();opener?.focus({preventScroll:true});}
   $('close').addEventListener('click',close);dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close();}});
   const contentKey=data=>JSON.stringify([{...data,updatedAt:undefined},language.language,themeSignature()]);
   const within=event=>event.composedPath().includes(dialog);
