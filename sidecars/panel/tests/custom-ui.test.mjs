@@ -1259,24 +1259,23 @@ test('usage-ui header update button shows red dot on available update and suppor
     idMap.get('locale').matches = prevLocaleMatches;
     assert.equal(idMap.get('action-tip').hidden, true);
     assert.equal(idMap.get('update-dot').hidden, true);
-    assert.equal(idMap.get('timezone').textContent, '本机存储');
+    assert.equal(idMap.get('subtitle'), undefined);
+    assert.equal(idMap.get('timezone'), undefined);
+    assert.equal(idMap.get('coverage').textContent, '1 次请求 · 始于 2026-11-16');
     assert.equal(idMap.get('sync-prog-wrap').hidden, true);
     assert.equal(idMap.get('alert').hidden, true);
 
     const firstHeatTile = idMap.get('heat').children[0];
     dash.update({ ...usageData, partialRequests: 361, syncing: false, retryingConversations: 1 });
-    assert.equal(idMap.get('timezone').textContent, '本机存储');
     assert.equal(idMap.get('sync-prog-wrap').hidden, true);
     assert.equal(idMap.get('alert').hidden, true, 'partialRequests alone must not trigger permanent unreadable alert');
     assert.equal(idMap.get('heat').children[0], firstHeatTile, 'non-chart updates must not rebuild heatmap DOM');
 
     dash.update({ ...usageData, syncing: true, summaryStale: true, syncMode: null, syncProgress: null });
-    assert.equal(idMap.get('timezone').textContent, '本机存储', 'transient live write summaryStale must not flash sync progress bar');
-    assert.equal(idMap.get('sync-prog-wrap').hidden, true);
+    assert.equal(idMap.get('sync-prog-wrap').hidden, true, 'transient live write summaryStale must not flash sync progress bar');
     assert.equal(idMap.get('refresh').disabled, false);
 
     dash.update({ ...usageData, syncing: true, syncMode: 'incremental', syncProgress: null });
-    assert.equal(idMap.get('timezone').textContent, '导入数据中…');
     assert.equal(idMap.get('sync-prog-wrap').hidden, false);
     assert.equal(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'), '2');
     assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0.02)');
@@ -1285,7 +1284,6 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('heat').children[0], firstHeatTile);
 
     dash.update({ ...usageData, syncing: true, syncMode: 'full', syncProgress: { done: 5, total: 10 } });
-    assert.equal(idMap.get('timezone').textContent, '导入数据中…');
     assert.equal(idMap.get('sync-prog-wrap').hidden, false);
     assert.equal(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'), '50');
     assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0.5)');
