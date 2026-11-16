@@ -99,7 +99,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   page.querySelector('.top').after(intro);
   const $=id=>view.getElementById(id),text=(id,value)=>{if($(id).textContent!==value)$(id).textContent=value;};
   let value=null,rangeMode='30d',year=null,anchorMonth=null,customFrom=null,customTo=null,selectedDate=null,disabledModels=new Set(),lastKey='',chartDataSig='',busy=false,opener=null;
-  let disposed=false,refreshMotion=null,refreshDelay=null,finishRefresh=null,accountKey=null,tipTarget=null,tipModel=null,actionTipTarget=null;
+  let disposed=false,refreshMotion=null,refreshDelay=null,finishRefresh=null,refreshPending=false,syncSpinning=false,spinStarted=0,accountKey=null,tipTarget=null,tipModel=null,actionTipTarget=null;
   let updateState={state:'idle'},updateBusy=false,updateTimer=null;
   const zh=()=>language.language==='zh-CN'||language.language==='zh-TW',tw=()=>language.language==='zh-TW',w=(cn,en,twText)=>(tw()&&twText!==undefined)?twText:(zh()?cn:en);
   const EFFORT_PAREN_RE=/\s*\((?:x?high|medium|med|low|minimal|none|thinking|adaptive|reasoning|fast|default)\)\s*$/i;
@@ -426,7 +426,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     renderGuide();
     renderUpdate();
     if(!value){
-      chartDataSig='';
+      chartDataSig='';syncSpinning=false;syncRefreshSpin();
       closeMenus();$('tip').hidden=true;$('usage-content').hidden=true;$('usage-waiting').hidden=false;
       text('usage-waiting',w('正在连接统计…','Connecting…','正在連線統計資料…'));text('subtitle',w('连接本机统计','Connecting local data','連線本機統計'));text('coverage','');text('timezone','');$('sync-prog-wrap').hidden=true;$('alert').hidden=true;
       for(const metric of $('totals').children){setActionTip(metric,'');metric.querySelector('.value')?.replaceChildren(node('span','','—'));}
@@ -481,16 +481,19 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     }
     syncYear();
     text('coverage',w(`${full(value.requests)} 次请求${value.firstDate?' · 始于 '+value.firstDate:''}`,`${full(value.requests)} requests${value.firstDate?' · since '+value.firstDate:''}`,`${full(value.requests)} 次請求${value.firstDate?' · 始於 '+value.firstDate:''}`));
+    const activeSync=Boolean(value.syncMode||(value.syncing&&value.summaryStale!==true));
+    syncSpinning=activeSync;syncRefreshSpin();
     const syncWrap=$('sync-prog-wrap'),syncFill=$('sync-prog-fill');
-    if(value.syncing){
+    if(activeSync){
       syncWrap.hidden=false;
       const p=value.syncProgress,known=p&&Number.isFinite(p.total)&&p.total>0&&Number.isFinite(p.done)&&p.done>=0;
       syncWrap.dataset.indeterminate=known?'false':'true';
-      syncFill.style.setProperty('transform',known?`scaleX(${Math.max(0.04,Math.min(1,p.done/p.total))})`:'');
+      syncFill.style.setProperty('transform',known?`scaleX(${Math.max(0.06,Math.min(1,p.done/p.total))})`:'');
     }else{
       syncWrap.hidden=true;delete syncWrap.dataset.indeterminate;syncFill.style.setProperty('transform','');
     }
-    text('timezone',value.syncing?w('同步历史中…','Syncing…','同步中…'):w('本机存储','Local only','本機儲存'));
+    const syncLabel=value.syncMode==='full'?w('全量同步历史中…','Full history sync…','全量同步歷史中…'):value.syncMode==='incremental'?w('增量同步中…','Incremental sync…','增量同步中…'):w('同步历史中…','Syncing…','同步中…');
+    text('timezone',activeSync?syncLabel:w('本机存储','Local only','本機儲存'));
     const alerts=[];if(value.unknownRequests)alerts.push(w(`${value.unknownRequests} 次请求日期未知，共 ${compact(value.unknownTokens)} Token`,`${value.unknownRequests} undated requests · ${compact(value.unknownTokens)} tokens`,`${value.unknownRequests} 次請求日期未知，共 ${compact(value.unknownTokens)} Token`));
     const confirmedMissing=value.confirmedMissingConversations??(value.syncing?0:value.missingConversations);
     if(value.unreadableFiles||confirmedMissing>0&&!value.syncing||value.persistenceError)alerts.push(w('部分记录暂不可读取，用量可能不完整','Some records are unavailable; usage may be incomplete','部分記錄暫無法讀取，用量可能不完整'));
@@ -680,19 +683,34 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     if(!Number.isFinite(next)||next<0||next>=buttons.length||buttons[next].disabled)return;event.preventDefault();event.target.tabIndex=-1;buttons[next].tabIndex=0;buttons[next].focus();
   });
   const languagePicker=language.mountLanguagePicker({button:$('locale'),label:$('locale-label'),parent:dialog,choose:onLanguage,nativeTitle:false});
+  function syncRefreshSpin(){
+    if(disposed)return;
+    const button=$('refresh'),turn=600,shouldSpin=refreshPending||syncSpinning;
+    if(shouldSpin){
+      clearTimeout(refreshDelay);refreshDelay=null;finishRefresh=null;
+      busy=true;button.disabled=true;button.setAttribute('aria-busy','true');
+      if(!refreshMotion){
+        spinStarted=performance.now();
+        refreshMotion=button.querySelector('svg').animate([{transform:'rotate(0deg)'},{transform:'rotate(360deg)'}],{duration:turn,iterations:Infinity});
+      }
+      return;
+    }
+    if(!refreshMotion){busy=false;button.disabled=false;button.setAttribute('aria-busy','false');return;}
+    if(refreshDelay)return;
+    // Finish the active turn cleanly so stopping never snaps the icon back.
+    const elapsed=performance.now()-spinStarted,remaining=Math.max(turn,Math.ceil(elapsed/turn)*turn)-elapsed;
+    refreshDelay=setTimeout(()=>{
+      refreshDelay=null;finishRefresh=null;
+      if(disposed)return;
+      if(refreshPending||syncSpinning){syncRefreshSpin();return;}
+      refreshMotion?.cancel();refreshMotion=null;busy=false;button.disabled=false;button.setAttribute('aria-busy','false');
+    },Math.max(0,remaining));
+  }
   $('refresh').addEventListener('click',async()=>{
-    if(busy||disposed)return;busy=true;const button=$('refresh'),turn=600,started=performance.now();button.disabled=true;button.setAttribute('aria-busy','true');
-    refreshMotion=button.querySelector('svg').animate([{transform:'rotate(0deg)'},{transform:'rotate(360deg)'}],{duration:turn,iterations:Infinity});
+    if(busy||disposed)return;refreshPending=true;syncRefreshSpin();
     try{await onRefresh();}
     catch{if(!disposed){text('alert',w('暂时无法刷新，请稍后重试','Refresh unavailable. Try again shortly.','暫時無法重新整理，請稍後重試'));$('alert').hidden=false;}}
-    finally{
-      // Fast requests still paint one whole turn. Slow requests finish their
-      // current turn, so cancel never snaps a half-rotated icon back to zero.
-      if(!disposed){const elapsed=performance.now()-started,remaining=Math.max(turn,Math.ceil(elapsed/turn)*turn)-elapsed;
-        await new Promise(resolve=>{finishRefresh=resolve;refreshDelay=setTimeout(resolve,Math.max(0,remaining));});}
-      clearTimeout(refreshDelay);refreshDelay=null;finishRefresh=null;refreshMotion?.cancel();refreshMotion=null;busy=false;
-      if(!disposed){button.disabled=false;button.setAttribute('aria-busy','false');}
-    }
+    finally{refreshPending=false;syncRefreshSpin();}
   });
   // Native showModal()/close() changes inertness across the complete host DOM.
   // In long chats this alone can block Chromium for seconds. A top-layer

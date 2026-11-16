@@ -793,7 +793,7 @@ module.exports = function installAgPulseInlineWidget() {
   document.addEventListener('keydown',onKey);document.addEventListener('pointerdown',onPointer);document.addEventListener('focusin',onFocus);
   window.addEventListener('resize',scheduleLayout);document.addEventListener('scroll',scheduleLayout,true);
   densityMedia.addEventListener('change',stopDensityMotion);
-  const timerId=setInterval(()=>{mount();fit();position();const pollMs=document.hidden?10000:usageDashboard?.isOpen&&data?.usage?.syncing?900:2200;if(conversationId()!==lastConversation||Date.now()-lastFetch>pollMs)refresh();},1000);
+  const timerId=setInterval(()=>{mount();fit();position();const modalSync=Boolean(data?.usage?.syncMode||(data?.usage?.syncing&&data?.usage?.summaryStale!==true));const pollMs=document.hidden?10000:usageDashboard?.isOpen&&modalSync?900:2200;if(conversationId()!==lastConversation||Date.now()-lastFetch>pollMs)refresh();},1000);
   window.__agPulseDispose=()=>{
     disposed=true;requestEpoch++;pending=false;refreshRequest=null;stopDensityMotion();densityFrame=null;densityProbe=null;
     clearInterval(timerId);clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();usageDashboard?.dispose();node?.remove();

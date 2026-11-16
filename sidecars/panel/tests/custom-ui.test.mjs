@@ -1250,18 +1250,27 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('alert').hidden, true, 'partialRequests alone must not trigger permanent unreadable alert');
     assert.equal(idMap.get('heat').children[0], firstHeatTile, 'non-chart updates must not rebuild heatmap DOM');
 
-    dash.update({ ...usageData, syncing: true, syncProgress: null });
-    assert.equal(idMap.get('timezone').textContent, '同步历史中…');
+    dash.update({ ...usageData, syncing: true, summaryStale: true, syncMode: null, syncProgress: null });
+    assert.equal(idMap.get('timezone').textContent, '本机存储', 'transient live write summaryStale must not flash sync progress bar');
+    assert.equal(idMap.get('sync-prog-wrap').hidden, true);
+    assert.equal(idMap.get('refresh').disabled, false);
+
+    dash.update({ ...usageData, syncing: true, syncMode: 'incremental', syncProgress: null });
+    assert.equal(idMap.get('timezone').textContent, '增量同步中…');
     assert.equal(idMap.get('sync-prog-wrap').hidden, false);
     assert.equal(idMap.get('sync-prog-wrap').dataset.indeterminate, 'true');
+    assert.equal(idMap.get('refresh').disabled, true);
+    assert.equal(idMap.get('refresh').getAttribute('aria-busy'), 'true');
     assert.equal(idMap.get('heat').children[0], firstHeatTile);
 
-    dash.update({ ...usageData, syncing: true, syncProgress: { done: 5, total: 10 } });
+    dash.update({ ...usageData, syncing: true, syncMode: 'full', syncProgress: { done: 5, total: 10 } });
+    assert.equal(idMap.get('timezone').textContent, '全量同步历史中…');
     assert.equal(idMap.get('sync-prog-wrap').hidden, false);
     assert.equal(idMap.get('sync-prog-wrap').dataset.indeterminate, 'false');
     assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0.5)');
+    assert.equal(idMap.get('refresh').disabled, true);
 
-    dash.update({ ...usageData, syncing: false, syncProgress: null, unreadableFiles: 1 });
+    dash.update({ ...usageData, syncing: false, syncMode: null, syncProgress: null, unreadableFiles: 1 });
     assert.equal(idMap.get('sync-prog-wrap').hidden, true);
     assert.equal(idMap.get('alert').hidden, false);
     assert.equal(idMap.get('alert').textContent, '部分记录暂不可读取，用量可能不完整');

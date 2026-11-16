@@ -324,7 +324,7 @@ export class DesktopUsage{
     this.liveRecoveryPollMs=liveRecoveryPollMs;this.liveBackgroundPollMs=liveBackgroundPollMs;this.liveBackgroundRetryMs=liveBackgroundRetryMs;
     this.liveStates=new Map();this.liveOrphans=new Set();this.liveRecoveries=new Map();this.liveRows=0;this.liveBytes=0;this.liveGroups=0;this.liveScope=null;this.liveEpoch=null;this.liveUnknownOverflow=false;this.liveMarkedError=false;
   }
-  syncing=false;lastSync=0;status='waiting';missingConversations=0;confirmedMissingConversations=0;retryingConversations=0;scope=null;scopeEpoch=null;forceQueued=false;disposed=false;continuation=null;syncTotal=0;syncDone=0;
+  syncing=false;lastSync=0;status='waiting';missingConversations=0;confirmedMissingConversations=0;retryingConversations=0;scope=null;scopeEpoch=null;forceQueued=false;disposed=false;continuation=null;syncTotal=0;syncDone=0;syncMode=null;
   rememberDelegates(scope,id,raw){
     if(scope!==this.store.identity)return [];
     if(this.delegatedScope!==scope||this.delegatedEpoch!==this.store.epoch){this.delegatedCandidates.clear();this.delegatedScope=scope;this.delegatedEpoch=this.store.epoch;}
@@ -536,8 +536,9 @@ export class DesktopUsage{
   sync(forceFull=false){
     if(this.disposed||!this.owns())return Promise.resolve();
     if(forceFull)this.forceQueued=true;
-    if(this.pending)return this.pending;
-    if(!this.continuation){this.passSeen.clear();this.passFailures.clear();this.syncTotal=0;this.syncDone=0;}
+    if(this.pending){if(forceFull)this.syncMode='full';return this.pending;}
+    if(!this.continuation){this.passSeen.clear();this.passFailures.clear();this.syncTotal=0;this.syncDone=0;this.syncMode=forceFull?'full':'incremental';}
+    else if(forceFull)this.syncMode='full';
     clearTimeout(this.continuation);this.continuation=null;
     this.syncing=true;this.status='syncing';
     this.pending=(async()=>{
@@ -551,8 +552,8 @@ export class DesktopUsage{
       this.confirmedMissingConversations=result.confirmed;this.retryingConversations=result.retrying;
       this.status=result.more?'syncing':result.missing||result.partial?'partial':'ready';
       if(result.more){this.continuation=setTimeout(()=>void this.sync(),this.continueDelay);this.continuation.unref?.();}
-      else {this.syncTotal=0;this.syncDone=0;}
-    })().catch(()=>{this.status='offline';this.lastSync=this.now();this.syncTotal=0;this.syncDone=0;}).finally(()=>{this.syncing=false;this.pending=null;if(!this.continuation){this.syncTotal=0;this.syncDone=0;}});return this.pending;
+      else {this.syncTotal=0;this.syncDone=0;this.syncMode=null;}
+    })().catch(()=>{this.status='offline';this.lastSync=this.now();this.syncTotal=0;this.syncDone=0;this.syncMode=null;}).finally(()=>{this.syncing=false;this.pending=null;if(!this.continuation){this.syncTotal=0;this.syncDone=0;this.syncMode=null;}});return this.pending;
   }
   async runSync(forceFull){
     const scope=this.store.identity,epoch=this.store.epoch;
@@ -562,12 +563,12 @@ export class DesktopUsage{
       return active;
     };
     if(!scope)return null;
-    if(this.scope!==scope||this.scopeEpoch!==epoch){this.scope=scope;this.scopeEpoch=epoch;this.fingerprints.clear();this.fullRemaining.clear();this.fullJournal=null;this.fullMissing=0;this.passSeen.clear();this.passFailures.clear();this.readFailures.clear();this.localScanResult=null;this.localScanAt=-Infinity;this.syncTotal=0;this.syncDone=0;}
+    if(this.scope!==scope||this.scopeEpoch!==epoch){this.scope=scope;this.scopeEpoch=epoch;this.fingerprints.clear();this.fullRemaining.clear();this.fullJournal=null;this.fullMissing=0;this.passSeen.clear();this.passFailures.clear();this.readFailures.clear();this.localScanResult=null;this.localScanAt=-Infinity;this.syncTotal=0;this.syncDone=0;this.syncMode=forceFull?'full':'incremental';}
     let missing=0,candidates,completePass=false;
     if(!forceFull&&this.fullRemaining.size){
       // A full import owns a fixed, bounded queue. Rediscovery between slices
       // could lose deleted/temporarily hidden IDs and keep the timer alive forever.
-      candidates=new Map(this.fullRemaining);missing=this.fullMissing;completePass=true;
+      candidates=new Map(this.fullRemaining);missing=this.fullMissing;completePass=true;this.syncMode='full';
     }else{
       let listed=[];
       try{listed=await this.store.listConversations(true);}catch{missing++;}
@@ -588,7 +589,7 @@ export class DesktopUsage{
       if(this.delegatedScope===scope&&this.delegatedEpoch===epoch)for(const [id,c]of this.delegatedCandidates)if(!candidates.has(id)){
         if(candidates.size>=this.maxMapEntries){missing++;break;}candidates.set(id,c);
       }
-      if(forceFull||this.sliceMs===0){this.fullRemaining=new Map(candidates);this.fullMissing=missing;this.passSeen.clear();this.passFailures.clear();completePass=true;this.syncTotal=this.fullRemaining.size;this.syncDone=0;}
+      if(forceFull||this.sliceMs===0){this.fullRemaining=new Map(candidates);this.fullMissing=missing;this.passSeen.clear();this.passFailures.clear();completePass=true;this.syncTotal=this.fullRemaining.size;this.syncDone=0;this.syncMode=forceFull?'full':'incremental';}
     }
     const reused=!forceFull&&completePass&&this.fullJournal;
     let journal=reused?this.fullJournal:this.host?await this.ledger.backfillState(scope,this.host,{preferred:[...candidates.keys()].map(hash)}):{};
@@ -698,8 +699,9 @@ export class DesktopUsage{
     const scope=this.store.identity,epoch=this.store.epoch,current=()=>!this.disposed&&this.owns()&&scope===this.store.identity&&epoch===this.store.epoch;
     const value=await this.ledger.summary(scope,Date.now(),{isCurrent:current});if(!current())return null;
     const syncing=this.syncing||!!this.continuation||!!this.ledger.diskSummaryPending||!!this.ledger.diskWrites||value?.summaryStale===true;
-    const syncProgress=syncing&&this.syncTotal>0?{done:Math.min(this.syncDone,this.syncTotal),total:this.syncTotal}:null;
-    return {...value,syncing,syncProgress,status:syncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true};
+    const syncMode=this.syncing||this.continuation?(this.syncMode||'incremental'):(this.ledger.diskSummaryPending||this.ledger.diskWrites)?'disk':null;
+    const syncProgress=syncMode&&this.syncTotal>0?{done:Math.min(this.syncDone,this.syncTotal),total:this.syncTotal}:null;
+    return {...value,syncing,syncMode,syncProgress,status:syncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true};
   }
   dispose(){this.disposed=true;this.forceQueued=false;clearTimeout(this.continuation);this.continuation=null;clearTimeout(this.liveRecoveryTimer);this.liveRecoveryTimer=null;this.refreshLiveScope();this.fullRemaining.clear();this.fullJournal=null;}
 }
