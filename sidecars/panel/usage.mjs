@@ -602,30 +602,33 @@ export class DesktopUsage{
       return time(b)-time(a);
     });
     const selected=completePass?ordered:ordered.slice(0,this.maxCandidates);
-    if(!completePass){this.syncTotal=selected.length;this.syncDone=0;}
-    else if(this.syncTotal===0&&this.fullRemaining.size){this.syncTotal=this.fullRemaining.size;this.syncDone=0;}
-    const started=this.now();let processed=0,checked=0,more=false,dirty=false,partial=!completePass&&ordered.length>selected.length;
-    const bumpProgress=()=>{if(!completePass)this.syncDone=checked;else{this.syncTotal=Math.max(this.syncTotal,this.syncDone+this.fullRemaining.size);this.syncDone=Math.max(this.syncDone,this.syncTotal-this.fullRemaining.size);}};
+    const work=[];
     for(const c of selected){
-      if(!current())return {current};
-      // Always consume one queued entry, even if the event loop was suspended
-      // past the slice budget before its first read. Every continuation advances.
-      if(processed&&(processed>=this.maxCandidatesPerSlice||this.now()-started>=this.maxPassMs)){more=completePass;partial=partial||completePass;break;}
       const key=hash(c.id),s=c.listed,mark=JSON.stringify([s?.stepCount,s?.modifiedAt,s?.status,s?.lastUserInputStepIndex]);
       // Recheck older imports once: they could finish without discovering
       // delegated conversations that were absent from the host's top-level list.
       const signature=hash('delegation-v1:'+c.id+':'+(c.signature||'')+mark),old=journal[key];
       const unchanged=old?.signature===signature;
       const forced=this.fullRemaining.has(c.id);
-      if(!forced&&this.passSeen.has(c.id)){checked++;bumpProgress();continue;}
-      if(!forced&&unchanged&&old?.state==='retry'&&old.retryAt>this.now()){this.passFailures.add(c.id);checked++;bumpProgress();continue;}
+      if(!forced&&this.passSeen.has(c.id))continue;
+      if(!forced&&unchanged&&old?.state==='retry'&&old.retryAt>this.now()){this.passFailures.add(c.id);continue;}
       const cached=s&&this.fingerprints.get(c.id)===mark&&!/RUNNING/.test(s.status||'');
       // A persisted checkpoint already verified both disk and host revision.
       // Restarting the collector alone must not force all settled chats to load.
       const settled=s?.modifiedAt&&/IDLE|DONE|COMPLETED|CANCELLED|CANCELED|STOPPED|FAILED|ERROR/.test(String(s.status||''));
-      if(!forced&&!old?.hasDelegates&&(c.signature?unchanged&&old.state==='complete'&&(!s||cached||settled):cached)){checked++;bumpProgress();continue;}
+      if(!forced&&!old?.hasDelegates&&(c.signature?unchanged&&old.state==='complete'&&(!s||cached||settled):cached))continue;
+      work.push({c,key,s,mark,signature,old,unchanged,forced});
+    }
+    if(!completePass){this.syncTotal=work.length;this.syncDone=0;}
+    else if(this.syncTotal===0&&this.fullRemaining.size){this.syncTotal=this.fullRemaining.size;this.syncDone=0;}
+    const started=this.now();let processed=0,more=false,dirty=false,partial=!completePass&&ordered.length>selected.length;
+    const bumpProgress=()=>{if(!completePass)this.syncDone=processed;else{this.syncTotal=Math.max(this.syncTotal,this.syncDone+this.fullRemaining.size);this.syncDone=Math.max(this.syncDone,this.syncTotal-this.fullRemaining.size);}};
+    for(const {c,key,s,mark,signature,old,unchanged,forced} of work){
+      if(!current())return {current};
+      // Always consume one queued entry, even if the event loop was suspended
+      // past the slice budget before its first read. Every continuation advances.
+      if(processed&&(processed>=this.maxCandidatesPerSlice||this.now()-started>=this.maxPassMs)){more=completePass;partial=partial||completePass;break;}
       if(processed&&this.now()-started>=this.sliceMs){more=completePass;break;}
-      checked++;
       processed++;
       this.passSeen.add(c.id);this.capMap(this.passSeen);
       this.fullRemaining.delete(c.id);
@@ -640,7 +643,7 @@ export class DesktopUsage{
           }
           this.fingerprints.set(c.id,mark);this.capMap(this.fingerprints);this.passFailures.delete(c.id);this.readFailures.delete(c.id);
           if(this.host){journal[key]={signature,state:'complete',failures:0,retryAt:0,hasDelegates:children.length>0};dirty=true;}
-          await yieldToLiveRequests();continue;
+          bumpProgress();await yieldToLiveRequests();continue;
         }
         // An independently discovered ID has no summary. An empty summary
         // intentionally reads steps until EOF; the shared reader still enforces

@@ -24,7 +24,7 @@ module.exports = function installAgPulseInlineWidget() {
   const HOVER_DELAY=250,WARM_WINDOW=350,LEAVE_DELAY=120;
   const isWarm=()=>Boolean(cardName||Date.now()<warmUntil);
   let refreshRequest=null,manualRequest=null,requestEpoch=0,disposed=false;
-  let composer=null,layoutFrame=null;
+  let composer=null,layoutFrame=null,modalSyncTimer=null;
   let usageDashboard=null;
   let densityFrame=null,densityMotion=null,densityProbe=null;
   const densityMedia=matchMedia('(prefers-reduced-motion: reduce)');
@@ -781,7 +781,11 @@ module.exports = function installAgPulseInlineWidget() {
     const current=()=>!disposed&&epoch===requestEpoch&&conversation===conversationId()&&conversation===lastConversation&&node?.isConnected;
     pending=true;lastFetch=Date.now();
     refreshRequest=(async()=>{
-      try{const syncParam=syncUsage===true?{usageSync:true}:syncUsage==='refresh'?{usageRefresh:true}:{};const result=await window.agPulseHost.getMetrics({conversationId:conversation,force,...syncParam});if(!current())return;node.style.visibility=result.enabled===false?'hidden':'';if(result.enabled===false){hide();return;}if(!conversation||result.speed&&result.speed.conversationId!==conversation)result.speed=null;data=result;if(result.preferences){syncGuide(result.preferences);preferences.sync(result.preferences);}if(Object.hasOwn(result,'theme'))themeController?.setHostTheme(result.theme);render();}
+      try{const syncParam=syncUsage===true?{usageSync:true}:syncUsage==='refresh'?{usageRefresh:true}:{};const result=await window.agPulseHost.getMetrics({conversationId:conversation,force,...syncParam});if(!current())return;node.style.visibility=result.enabled===false?'hidden':'';if(result.enabled===false){hide();return;}if(!conversation||result.speed&&result.speed.conversationId!==conversation)result.speed=null;data=result;if(result.preferences){syncGuide(result.preferences);preferences.sync(result.preferences);}if(Object.hasOwn(result,'theme'))themeController?.setHostTheme(result.theme);render();
+        const modalSync=Boolean(usageDashboard?.isOpen&&!document.hidden&&(data?.usage?.syncMode||(data?.usage?.syncing&&data?.usage?.summaryStale!==true)));
+        clearTimeout(modalSyncTimer);modalSyncTimer=null;
+        if(modalSync){modalSyncTimer=setTimeout(()=>{modalSyncTimer=null;if(!disposed&&usageDashboard?.isOpen&&!document.hidden)refresh();},250);modalSyncTimer.unref?.();}
+      }
       catch{if(current()&&data){data.connection='stale';data.error=t('reconnecting');render();}}
       finally{if(epoch===requestEpoch){pending=false;refreshRequest=null;}}
     })();
@@ -793,10 +797,10 @@ module.exports = function installAgPulseInlineWidget() {
   document.addEventListener('keydown',onKey);document.addEventListener('pointerdown',onPointer);document.addEventListener('focusin',onFocus);
   window.addEventListener('resize',scheduleLayout);document.addEventListener('scroll',scheduleLayout,true);
   densityMedia.addEventListener('change',stopDensityMotion);
-  const timerId=setInterval(()=>{mount();fit();position();const modalSync=Boolean(data?.usage?.syncMode||(data?.usage?.syncing&&data?.usage?.summaryStale!==true));const pollMs=document.hidden?10000:usageDashboard?.isOpen&&modalSync?900:2200;if(conversationId()!==lastConversation||Date.now()-lastFetch>pollMs)refresh();},1000);
+  const timerId=setInterval(()=>{mount();fit();position();if(conversationId()!==lastConversation||Date.now()-lastFetch>(document.hidden?10000:2200))refresh();},1000);
   window.__agPulseDispose=()=>{
     disposed=true;requestEpoch++;pending=false;refreshRequest=null;stopDensityMotion();densityFrame=null;densityProbe=null;
-    clearInterval(timerId);clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();usageDashboard?.dispose();node?.remove();
+    clearInterval(timerId);clearTimeout(modalSyncTimer);modalSyncTimer=null;clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();usageDashboard?.dispose();node?.remove();
     document.removeEventListener('keydown',onKey);document.removeEventListener('pointerdown',onPointer);document.removeEventListener('focusin',onFocus);
     document.removeEventListener('scroll',scheduleLayout,true);window.removeEventListener('resize',scheduleLayout);
     densityMedia.removeEventListener('change',stopDensityMotion);

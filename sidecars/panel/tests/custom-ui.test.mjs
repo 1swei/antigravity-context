@@ -1256,22 +1256,24 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('refresh').disabled, false);
 
     dash.update({ ...usageData, syncing: true, syncMode: 'incremental', syncProgress: null });
-    assert.equal(idMap.get('timezone').textContent, '增量同步中…');
+    assert.equal(idMap.get('timezone').textContent, '导入数据中…');
     assert.equal(idMap.get('sync-prog-wrap').hidden, false);
-    assert.equal(idMap.get('sync-prog-wrap').dataset.indeterminate, 'true');
+    assert.equal(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'), '0');
+    assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0.02)');
     assert.equal(idMap.get('refresh').disabled, true);
     assert.equal(idMap.get('refresh').getAttribute('aria-busy'), 'true');
     assert.equal(idMap.get('heat').children[0], firstHeatTile);
 
     dash.update({ ...usageData, syncing: true, syncMode: 'full', syncProgress: { done: 5, total: 10 } });
-    assert.equal(idMap.get('timezone').textContent, '全量同步历史中…');
+    assert.equal(idMap.get('timezone').textContent, '导入数据中…');
     assert.equal(idMap.get('sync-prog-wrap').hidden, false);
-    assert.equal(idMap.get('sync-prog-wrap').dataset.indeterminate, 'false');
+    assert.equal(idMap.get('sync-prog-wrap').getAttribute('aria-valuenow'), '50');
     assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0.5)');
     assert.equal(idMap.get('refresh').disabled, true);
 
     dash.update({ ...usageData, syncing: false, syncMode: null, syncProgress: null, unreadableFiles: 1 });
     assert.equal(idMap.get('sync-prog-wrap').hidden, true);
+    assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0)');
     assert.equal(idMap.get('alert').hidden, false);
     assert.equal(idMap.get('alert').textContent, '部分记录暂不可读取，用量可能不完整');
 
