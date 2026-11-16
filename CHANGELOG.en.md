@@ -3,8 +3,14 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.0` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.1` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-16`
+
+---
+
+## v1.0.1 (`2026-11-16`)
+
+- **Compact Inline Speed Chip**: Hid the turns and steps prefix (`#rounds`) before `tok/s` on the inline composer bar, keeping only `tok/s` visible (turns & steps remain inside the hover details card).
 
 ---
 

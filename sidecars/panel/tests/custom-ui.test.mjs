@@ -499,6 +499,7 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     };
     await new Promise(r => setTimeout(r, 3200));
     assert.equal(createdIds.get('rounds').textContent, '2 轮 44 步');
+    assert.equal(createdIds.get('rounds').hasAttribute('hidden'), true);
     assert.equal(createdIds.get('tps').textContent, '228');
     assert.equal(createdIds.get('cache-total').textContent, '3.2M tok');
     assert.equal(createdIds.get('cache-rate').textContent, '98%');

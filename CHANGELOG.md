@@ -3,8 +3,14 @@
 **简体中文** · [English](CHANGELOG.en.md)
 
 - **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
-- **当前版本**：`1.0.0`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
+- **当前版本**：`1.0.1`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
 - **更新时间**：`2026-11-16`
+
+---
+
+## v1.0.1（`2026-11-16`）
+
+- **精简输入框内联速度条**：隐藏 `tok/s` 前的轮次与步骤数（`#rounds`），仅保留 `tok/s` 速率展示（悬停详情弹窗内仍保留轮次与步骤统计）。
 
 ---
 
