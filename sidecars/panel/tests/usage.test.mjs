@@ -60,3 +60,20 @@ test('IDE usage keeps a separate ledger and source across collector restarts',as
  assert.equal((await desktop.summary(account)).totalTokens,0);
  const restarted=new DesktopUsage(store,new UsageLedger(ide.directory,{source:'ide-local'}));await restarted.sync();assert.equal((await restarted.snapshot()).totalTokens,1100);assert.equal((await restarted.snapshot()).requests,1);
 });
+test('JSON ledger summary caches unchanged files and detects external edits',async t=>{
+ const ledger=await fixture(t);
+ await ledger.ingest(account,id,raw());
+ await ledger.ingest(account,other,raw({usage:{responseId:'req-two'}}));
+ let s=await ledger.summary(account);
+ assert.equal(s.totalTokens,2200);assert.equal(ledger.jsonCache.size,2);
+ const cachedEntries=new Map(ledger.jsonCache);
+ await ledger.ingest(account,id,raw({usage:{outputTokens:'120'}}));
+ s=await ledger.summary(account);
+ assert.equal(s.totalTokens,2240);
+ const reused=[...ledger.jsonCache.entries()].filter(([k,v])=>cachedEntries.get(k)===v);
+ assert.equal(reused.length,1,'Unchanged JSON file reuses cached entry across revision increments');
+ await writeFile(ledger.file(account,other),'{corrupted');
+ await ledger.ingest(account,id,raw({usage:{outputTokens:'130'}}));
+ s=await ledger.summary(account);
+ assert.equal(s.unreadableFiles,1);assert.equal(s.totalTokens,1150);
+});

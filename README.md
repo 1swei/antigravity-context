@@ -94,10 +94,8 @@ git clone https://github.com/1swei/antigravity-context.git "$env:USERPROFILE\.ge
 
 ```bash
 node --check sidecars/panel/main.mjs
-node --test sidecars/panel/tests/custom-ui.test.mjs sidecars/panel/tests/runtime-ui.test.mjs sidecars/panel/tests/startup.test.mjs sidecars/panel/tests/usage.test.mjs sidecars/panel/tests/i18n.test.mjs sidecars/panel/tests/context.test.mjs sidecars/panel/tests/transcript.test.mjs
+node --test sidecars/panel/tests/*.test.mjs
 ```
-
-> 注：`sidecars/panel/tests/entry-usage.test.mjs` 中包含 1 条依赖宿主 `ide/main.mjs` 的 IDE 入口测试，独立插件包环境下该条会提示缺少 `ide/main.mjs`，其余 `app` 与 `preview` 测试用例均正常通过。
 
 ---
 

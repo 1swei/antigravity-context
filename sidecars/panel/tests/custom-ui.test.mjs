@@ -1240,18 +1240,34 @@ test('usage-ui header update button shows red dot on available update and suppor
     dash.open(usageData, null, { state: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' });
     assert.equal(idMap.get('update-dot').hidden, true);
     assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 本机存储');
+    assert.equal(idMap.get('alert').hidden, true);
 
-    dash.update({ ...usageData, syncing: false, retryingConversations: 1 });
+    const firstHeatTile = idMap.get('heat').children[0];
+    dash.update({ ...usageData, partialRequests: 361, syncing: false, retryingConversations: 1 });
     assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 本机存储');
+    assert.equal(idMap.get('alert').hidden, true, 'partialRequests alone must not trigger permanent unreadable alert');
+    assert.equal(idMap.get('heat').children[0], firstHeatTile, 'non-chart updates must not rebuild heatmap DOM');
 
     dash.update({ ...usageData, syncing: true });
     assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 同步历史中…');
+    assert.equal(idMap.get('heat').children[0], firstHeatTile);
+
+    dash.update({ ...usageData, syncing: false, unreadableFiles: 1 });
+    assert.equal(idMap.get('alert').hidden, false);
+    assert.equal(idMap.get('alert').textContent, '部分记录暂不可读取，用量可能不完整');
+
+    dash.update({ ...usageData, syncing: false, confirmedMissingConversations: 1 });
+    assert.equal(idMap.get('alert').hidden, false);
+    dash.update({ ...usageData, syncing: false, persistenceError: true });
+    assert.equal(idMap.get('alert').hidden, false);
+    dash.update({ ...usageData, syncing: false });
+    assert.equal(idMap.get('alert').hidden, true);
 
     dash.update(usageData, {
       state: 'available',
       currentVersion: '1.0.0',
       latestVersion: '1.0.1',
-      notes: '## v1.0.2\n- **更新**：精简界面\n**Full Changelog**: https://github.com/1swei/antigravity-context/compare/v1.0.0...v1.0.2',
+      notes: '## v1.0.2\n- **更新**：精简界面\n- 第2行\n- 第3行\n- 第4行\n- 第5行\n**Full Changelog**: https://github.com/1swei/antigravity-context/compare/v1.0.0...v1.0.2',
     });
     assert.equal(idMap.get('update-dot').hidden, false);
 
@@ -1275,7 +1291,7 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('update-menu').open, true);
     assert.equal(idMap.get('upd-cur').textContent, 'v1.0.0');
     assert.equal(idMap.get('upd-lat').textContent, 'v1.0.1');
-    assert.equal(idMap.get('upd-notes').textContent, '• 更新：精简界面');
+    assert.equal(idMap.get('upd-notes').textContent, '• 更新：精简界面\n• 第2行\n• 第3行\n• 第4行\n…');
     assert.equal(idMap.get('upd-feedback').textContent, '');
     assert.equal(idMap.get('upd-action').textContent, '立即更新');
     await new Promise(r => setImmediate(r));

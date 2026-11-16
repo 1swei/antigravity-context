@@ -1,7 +1,7 @@
 import {Worker} from 'node:worker_threads';
 // Local usage ledger. Never stores prompts, credentials or raw request IDs.
 import {readFile,writeFile,mkdir,rename,readdir,unlink,open,stat,lstat} from 'node:fs/promises';
-import {join} from 'node:path';
+import {join,basename} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {tokenCount,requestCacheMetrics} from './metrics.mjs';
 import {formatModelName} from './context.mjs';
@@ -93,7 +93,7 @@ const validRow=r=>r&&HASH.test(r.id)&&typeof r.model==='string'&&r.model.length<
   (r.at===null||Number.isSafeInteger(r.at)&&r.at>=0)&&keys.every(k=>r[k]===null||Number.isSafeInteger(r[k])&&r[k]>=0);
 export class UsageLedger{
   constructor(directory=join(platformPaths().data,'usage-v1'),{timeZone='Asia/Shanghai',source='desktop-local'}={}){this.directory=directory;this.timeZone=timeZone;this.source=source;}
-  _gate=Promise.resolve();_barrier=Promise.resolve();_writes=new Set();_files=new Map();usageWrites=new Map();revision=0;cache=null;
+  _gate=Promise.resolve();_barrier=Promise.resolve();_writes=new Set();_files=new Map();usageWrites=new Map();revision=0;cache=null;jsonCache=new Map();jsonCacheScope=null;
   beginUsageWrite(scope){this.usageWrites.set(scope,(this.usageWrites.get(scope)||0)+1);}
   endUsageWrite(scope){const n=(this.usageWrites.get(scope)||0)-1;if(n>0)this.usageWrites.set(scope,n);else this.usageWrites.delete(scope);}
   // Public queue remains a snapshot barrier for all outstanding writes. Its
@@ -174,6 +174,7 @@ export class UsageLedger{
       await mkdir(join(this.directory,scope),{recursive:true});if(isCurrent()!==true)return;const temp=file+'.'+randomUUID()+'.tmp';
       try{await this.writeRecord(temp,JSON.stringify({schema:1,account:scope,records}));if(isCurrent()!==true)return;await rename(temp,file);}
       finally{await unlink(temp).catch(()=>{});}
+      if(this.jsonCacheScope===scope)this.jsonCache.delete(basename(file));
       // Keep the last same-account/day result as a visibly stale fallback
       // while a potentially expensive disk-backed summary is rebuilt.
       this.revision++;
@@ -258,12 +259,33 @@ export class UsageLedger{
       this.startDiskSummary(scope,now,scanRevision,cacheKey,isCurrent);
       return this.cache?.key===cacheKey?{...this.cache.value,summaryStale:true}:unknown();
     }
-    for(const name of files.filter(name=>/^[a-f0-9]{64}\.json$/.test(name))){
+    const jsonNames=files.filter(name=>/^[a-f0-9]{64}\.json$/.test(name));
+    const customReader=this.readSummaryRecord!==UsageLedger.prototype.readSummaryRecord;
+    if(this.jsonCacheScope!==scope){this.jsonCache.clear();this.jsonCacheScope=scope;}
+    const present=new Set(jsonNames);
+    for(const cachedName of this.jsonCache.keys())if(!present.has(cachedName))this.jsonCache.delete(cachedName);
+    for(const name of jsonNames){
+      const fullPath=join(this.directory,scope,name);
       try{
-        const text=await this.readSummaryRecord(join(this.directory,scope,name));
-        const record=JSON.parse(text);if(record.schema!==1||record.account!==scope||!Array.isArray(record.records)||!record.records.every(validRow))throw Error('Invalid ledger');
-        for(const r of record.records){const previous=seen.get(r.id);if(!previous||sum(r)>sum(previous))seen.set(r.id,r);}
-      }catch{unreadable++;}
+        let records=null,stamp=null;
+        if(!customReader){
+          const info=await lstat(fullPath,{bigint:true});
+          if(info.isSymbolicLink()||!info.isFile())throw Error('Invalid ledger');
+          stamp=`${info.size}:${info.mtimeNs}:${info.ctimeNs}:${info.ino}`;
+          const hit=this.jsonCache.get(name);
+          if(hit&&hit.stamp===stamp)records=hit.records;
+        }
+        if(!records){
+          const text=await this.readSummaryRecord(fullPath);
+          const record=JSON.parse(text);if(record.schema!==1||record.account!==scope||!Array.isArray(record.records)||!record.records.every(validRow))throw Error('Invalid ledger');
+          records=record.records;
+          if(!customReader&&stamp){
+            this.jsonCache.set(name,{stamp,records});
+            while(this.jsonCache.size>4096)this.jsonCache.delete(this.jsonCache.keys().next().value);
+          }
+        }
+        for(const r of records){const previous=seen.get(r.id);if(!previous||sum(r)>sum(previous))seen.set(r.id,r);}
+      }catch{this.jsonCache.delete(name);unreadable++;}
     }
     for(const r of seen.values()){
       models.add(r.model);if(r.partial)partialRequests++;

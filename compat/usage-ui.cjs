@@ -93,7 +93,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   setMarkup(intro,'<span class="intro-mark" aria-hidden="true"><svg viewBox="0 -960 960 960"><path d="M480-280q17 0 28.5-11.5T520-320v-160q0-17-11.5-28.5T480-520q-17 0-28.5 11.5T440-480v160q0 17 11.5 28.5T480-280Zm0-320q17 0 28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 28.5T480-600Zm0 520q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z"/></svg></span><div class="intro-copy"><p id="usage-intro-text"></p></div><span id="usage-intro-error" class="intro-error" role="status"></span><button id="usage-intro-done" type="button"></button>');
   page.querySelector('.top').after(intro);
   const $=id=>view.getElementById(id),text=(id,value)=>{if($(id).textContent!==value)$(id).textContent=value;};
-  let value=null,rangeMode='30d',year=null,anchorMonth=null,customFrom=null,customTo=null,selectedDate=null,disabledModels=new Set(),lastKey='',busy=false,opener=null;
+  let value=null,rangeMode='30d',year=null,anchorMonth=null,customFrom=null,customTo=null,selectedDate=null,disabledModels=new Set(),lastKey='',chartDataSig='',busy=false,opener=null;
   let disposed=false,refreshMotion=null,refreshDelay=null,finishRefresh=null,accountKey=null,tipTarget=null,tipModel=null,actionTipTarget=null;
   let updateState={state:'idle'},updateBusy=false,updateTimer=null;
   const zh=()=>language.language==='zh-CN'||language.language==='zh-TW',tw=()=>language.language==='zh-TW',w=(cn,en,twText)=>(tw()&&twText!==undefined)?twText:(zh()?cn:en);
@@ -421,6 +421,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     renderGuide();
     renderUpdate();
     if(!value){
+      chartDataSig='';
       closeMenus();$('tip').hidden=true;$('usage-content').hidden=true;$('usage-waiting').hidden=false;
       text('usage-waiting',w('正在连接统计…','Connecting…','正在連線統計資料…'));text('subtitle',w('连接本机统计','Connecting local data','連線本機統計'));text('coverage','');text('timezone','');$('alert').hidden=true;
       for(const metric of $('totals').children){setActionTip(metric,'');metric.querySelector('.value')?.replaceChildren(node('span','','—'));}
@@ -478,9 +479,10 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     text('timezone',value.timeZone+' · '+(value.syncing?w('同步历史中…','Syncing…','同步中…'):w('本机存储','Local only','本機儲存')));
     const alerts=[];if(value.unknownRequests)alerts.push(w(`${value.unknownRequests} 次请求日期未知，共 ${compact(value.unknownTokens)} Token`,`${value.unknownRequests} undated requests · ${compact(value.unknownTokens)} tokens`,`${value.unknownRequests} 次請求日期未知，共 ${compact(value.unknownTokens)} Token`));
     const confirmedMissing=value.confirmedMissingConversations??(value.syncing?0:value.missingConversations);
-    if(value.partialRequests||value.unreadableFiles||confirmedMissing>0&&!value.syncing||value.persistenceError)alerts.push(w('部分记录暂不可读取，用量可能不完整','Some records are unavailable; usage may be incomplete','部分記錄暫無法讀取，用量可能不完整'));
+    if(value.unreadableFiles||confirmedMissing>0&&!value.syncing||value.persistenceError)alerts.push(w('部分记录暂不可读取，用量可能不完整','Some records are unavailable; usage may be incomplete','部分記錄暫無法讀取，用量可能不完整'));
     $('alert').hidden=!alerts.length;text('alert',alerts.join(' · '));
-    renderHeat();renderChart();
+    const dataSig=JSON.stringify([value.accountKey,value.today,value.firstDate,value.models,value.days,language.language,themeSignature()]);
+    if(dataSig!==chartDataSig){chartDataSig=dataSig;renderHeat();renderChart();}
   }
   function syncYear(){
     text('year-label',String(year));$('year').setAttribute('aria-label',w('选择年份','Select year','選取年份')+' · '+year);$('year-menu').setAttribute('aria-label',w('年份','Year','年份'));
@@ -568,10 +570,10 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
       text('upd-prog-val',known?`${Math.min(100,Math.round(prog.received/prog.total*100))}% · ${formatBytes(prog.received)}/${formatBytes(prog.total)}`:'');
       $('upd-prog-fill').style.setProperty('transform',known?`scaleX(${Math.max(0.02,Math.min(1,prog.received/prog.total))})`:'');
     }
-    const notesText=(s.notes||'').split(/\r?\n/).map(l=>l.trim())
+    const notesLines=(s.notes||'').split(/\r?\n/).map(l=>l.trim())
       .filter(l=>l&&!l.startsWith('#')&&!/^\*{0,2}Full Changelog\*{0,2}\s*:/i.test(l))
-      .map(l=>l.replace(/^[-*]\s+/,'• ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/`([^`]+)`/g,'$1'))
-      .slice(0,4).join('\n');
+      .map(l=>l.replace(/^[-*]\s+/,'• ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/`([^`]+)`/g,'$1'));
+    const notesText=notesLines.length>4?[...notesLines.slice(0,4),'…'].join('\n'):notesLines.join('\n');
     $('upd-notes').hidden=st!=='available'||!notesText;text('upd-notes',notesText);
     const errMap={
       network:w('网络请求失败，请检查代理或网络','Connection failed. Check network/proxy.','網路連線失敗，請檢查代理或網路'),

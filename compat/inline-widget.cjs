@@ -482,6 +482,14 @@ module.exports = function installAgPulseInlineWidget() {
     if(closest.length===1)return closest[0];
     return closest.find(pair=>pair.editor===document.activeElement)||closest.find(pair=>pair.branch===composer?.branch&&pair.editor===composer?.editor)||null;
   }
+  function canKeepMounted(){
+    if(surface||!node?.isConnected||!composer?.editor?.isConnected||!composer.row?.isConnected||!composer.branch?.isConnected)return false;
+    if(node.parentElement!==composer.row||node.previousElementSibling!==composer.branch||node.dataset.layout==='blocked')return false;
+    if(!visibleHostElement(composer.editor))return false;
+    const active=document.activeElement;
+    if(active&&active!==composer.editor&&!composer.editor.contains(active)&&active.closest?.('[data-testid="agent-input-box"]'))return false;
+    return true;
+  }
   function mount(){
     if(disposed)return;
     // A replaced instance's delayed preferences/observer callback must never
@@ -497,6 +505,7 @@ module.exports = function installAgPulseInlineWidget() {
       if(!node.isConnected||!node.getClientRects().length){node.dataset.layout='blocked';document.body.append(node);usageDashboard.restoreModal();}
       return;
     }
+    if(canKeepMounted()){if(syncConversation())render();return;}
     const found=findComposer();
     if(!found){
       stopDensityMotion();densityFrame=null;densityProbe=null;composer=null;resizeObserver?.disconnect();

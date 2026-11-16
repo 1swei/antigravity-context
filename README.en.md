@@ -94,10 +94,8 @@ Requires Node.js >= 20:
 
 ```bash
 node --check sidecars/panel/main.mjs
-node --test sidecars/panel/tests/custom-ui.test.mjs sidecars/panel/tests/runtime-ui.test.mjs sidecars/panel/tests/startup.test.mjs sidecars/panel/tests/usage.test.mjs sidecars/panel/tests/i18n.test.mjs sidecars/panel/tests/context.test.mjs sidecars/panel/tests/transcript.test.mjs
+node --test sidecars/panel/tests/*.test.mjs
 ```
-
-> Note: `sidecars/panel/tests/entry-usage.test.mjs` includes an IDE entrypoint check (`ide/main.mjs`) that only runs when the IDE package is present alongside the desktop plugin; the `app` and `preview` test cases pass standalone.
 
 ---
 

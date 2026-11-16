@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {existsSync} from 'node:fs';
 
 // Execute the real App/IDE entrypoints with inert host, disk and transport
 // adapters. No installed application or personal statistics are touched.
@@ -68,7 +69,7 @@ async function entryFixture(host,url,selection=false){
   return {ordinarySyncs,ordinarySnapshots,explicitSyncs:state.syncs.slice(ordinarySyncs),explicitSnapshot:state.snapshots.at(-1),active,inactive,hotPathReads,refused,ingests:state.ingests};
 }
 
-for(const host of ['app','ide'])test(`${host} real entrypoint gates history and passes synchronous ownership predicates`,()=>{
+for(const host of ['app','ide'])test(`${host} real entrypoint gates history and passes synchronous ownership predicates`,{skip:host==='ide'&&!existsSync(new URL('../../../ide/main.mjs',import.meta.url))},()=>{
   const url=new URL(host==='ide'?'../../../ide/main.mjs':'../main.mjs',import.meta.url).href;
   const script=`(${entryFixture.toString()})(${JSON.stringify(host)},${JSON.stringify(url)}).then(value=>console.log(JSON.stringify(value)))`;
   const result=spawnSync(process.execPath,['--experimental-vm-modules','--input-type=module','-e',script],{encoding:'utf8',timeout:15000,windowsHide:true});
