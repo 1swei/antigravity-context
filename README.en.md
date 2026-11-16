@@ -105,11 +105,4 @@ node --test sidecars/panel/tests/custom-ui.test.mjs sidecars/panel/tests/runtime
 
 This project is a derivative fork based on the MIT-licensed `antigrative-dashboard` (`antigravity-pulse` v0.8.20 baseline) originally created by `YOU-SHOULD-KNOW-ME`. The original upstream GitHub repository (`https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard`) is no longer available (HTTP 404).
 
-### Major Changes in v1.0.0
-- Removed the right-side auxiliary pane web dashboard (`has_web_ui: false`, `ui_config` and panel web assets removed) and updated `sidecars/panel/main.mjs` to run as a headless background collector + inline CDP injector.
-- Removed quota-group UI blocks and upgraded the updater with automatic background checks, top-right red-dot alerts in the usage modal, and verified online installation.
-- Calibrated context window occupancy (latest request actual server usage priority), transcript parsing (post-compaction filtering, undo/revision handling), and usage ledger deduplication.
-- Consolidated the Token usage modal onto a single page with unified date filters (`7d`, `30d`, `month`, `year`, `custom`) and cross-linked heatmap/chart drilldown.
-- Adapted inline widget and modal themes dynamically to host Antigravity light/dark CSS variables and fonts, and updated branding to **Antigravity Context** with a redesigned vector icon.
-
 Licensed under the [MIT License](LICENSE). See [Changelog (English)](CHANGELOG.en.md) · [更新日志 (中文)](CHANGELOG.md) for details.

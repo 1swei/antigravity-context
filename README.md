@@ -105,11 +105,4 @@ node --test sidecars/panel/tests/custom-ui.test.mjs sidecars/panel/tests/runtime
 
 本项目基于原作者 `YOU-SHOULD-KNOW-ME` 发布的 MIT 开源项目 `antigrative-dashboard`（`antigravity-pulse` v0.8.20 基线）进行二次开发与自维护。原上游 GitHub 仓库（`https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard`）目前已失效（HTTP 404）。
 
-### v1.0.0 主要改动
-- 移除右侧辅助栏 Web 看板（`has_web_ui: false`、移除 `ui_config` 及看板前端源码），将 `sidecars/panel/main.mjs` 改造为纯无头后台采集与内联注入服务。
-- 移除额度组（Quota）区块；恢复并升级更新机制（启动与后台定时自动检查更新、用量统计弹窗右上角红点提醒与在线校验安装）。
-- 校准上下文占用统计（优先取最近请求的服务端真实 Token）、Transcript 构成解析（剔除压缩前历史、准确识别撤销/修订）及跨会话用量去重。
-- 重构用量统计弹窗为单页统一日期筛选（`7d` / `30d` / `月` / `年` / `自定义`）并打通热力图与明细联动。
-- 适配 Antigravity 宿主浅色/深色 CSS 变量与字体，重构插件展示名称（**Antigravity Context**）与矢量图标。
-
 本项目采用 [MIT License](LICENSE) 开源，完整变更记录见 [更新日志 (中文)](CHANGELOG.md) · [Changelog (English)](CHANGELOG.en.md)。
