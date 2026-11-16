@@ -1,0 +1,1109 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Script } from 'node:vm';
+import { spawnSync } from 'node:child_process';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, '..', '..', '..');
+const require = createRequire(import.meta.url);
+const createTheme = require('../../../compat/theme.cjs');
+const createI18n = require('../../../compat/i18n.cjs');
+const installInline = require('../../../compat/inline-widget.cjs');
+
+function makeStyleStore(initial = {}) {
+  const map = new Map(Object.entries(initial));
+  const api = {
+    getPropertyValue(name) { return map.get(name) ?? ''; },
+    setProperty(name, value) { map.set(name, String(value)); },
+    removeProperty(name) { map.delete(name); },
+    dump() { return Object.fromEntries(map); },
+  };
+  return new Proxy(api, {
+    get(target, prop) { return prop in target ? target[prop] : (map.get(String(prop)) ?? ''); },
+    set(_target, prop, value) { map.set(String(prop), String(value)); return true; },
+  });
+}
+
+function makeCanvasContext() {
+  let fill = 'transparent';
+  const parse = c => {
+    const raw = String(c || '').trim();
+    const h = raw.match(/^#([0-9a-f]{6})$/i);
+    if (h) {
+      const n = parseInt(h[1], 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+    }
+    const r = raw.match(/^rgba?\(\s*([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)(?:\s*[,/]\s*([0-9.]+%?))?\s*\)$/i);
+    if (r) {
+      const a = r[4] === undefined ? 255 : Math.round((r[4].endsWith('%') ? Number(r[4].slice(0, -1)) / 100 : Number(r[4])) * 255);
+      return [Number(r[1]), Number(r[2]), Number(r[3]), a];
+    }
+    return [0, 0, 0, 0];
+  };
+  return {
+    set fillStyle(v) { fill = v; },
+    get fillStyle() { return fill; },
+    clearRect() { fill = 'transparent'; },
+    fillRect() {},
+    getImageData() { return { data: parse(fill) }; },
+  };
+}
+
+test('theme adapter adopts Antigravity translucent borders, primary accent, and live body/editor fonts', () => {
+  const hostVars = {
+    '--background': '#FFFFFF',
+    '--card': '#FFFFFF',
+    '--foreground': '#0A0A0C',
+    '--card-border': 'rgb(10 10 12 / 0.07)',
+    '--border': 'rgb(10 10 12 / 0.06)',
+    '--secondary': 'rgb(10 10 12 / 0.06)',
+    '--secondary-foreground': '#3F3F46',
+    '--muted-foreground': '#71717A',
+    '--primary': '#2F75C3',
+    '--editor-font-family': '"Google Sans Code", monospace',
+  };
+  let bodyFont = '"Google Sans Flex", "Google Sans", system-ui, sans-serif';
+  let themeClass = 'theme-light';
+  const makeHostEl = () => ({
+    nodeType: 1,
+    getAttribute: () => null,
+    classList: { contains: c => c === themeClass },
+  });
+  const rootEl = makeHostEl();
+  const bodyEl = makeHostEl();
+  const targetStyle = makeStyleStore();
+  const target = {
+    dataset: {},
+    style: targetStyle,
+    ownerDocument: {
+      documentElement: rootEl,
+      body: bodyEl,
+      createElement: tag => tag === 'canvas' ? { width: 1, height: 1, getContext: () => makeCanvasContext() } : {},
+    },
+  };
+  const prevGetComputed = globalThis.getComputedStyle;
+  const prevDocument = globalThis.document;
+  const prevWindow = globalThis.window;
+  const prevMatchMedia = globalThis.matchMedia;
+  const prevObserver = globalThis.MutationObserver;
+  const prevCSS = globalThis.CSS;
+  const mm = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  globalThis.document = target.ownerDocument;
+  globalThis.getComputedStyle = el => el === bodyEl
+    ? { fontFamily: bodyFont, getPropertyValue: () => '' }
+    : { fontFamily: 'system-ui', colorScheme: themeClass === 'theme-dark' ? 'dark' : 'light', getPropertyValue: k => hostVars[k] ?? '' };
+  globalThis.matchMedia = mm;
+  globalThis.window = { matchMedia: mm };
+  globalThis.CSS = { supports: () => true };
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+
+  let controller;
+  try {
+    const theme = createTheme();
+    controller = theme.attach(target, { embedded: true });
+    const light = targetStyle.dump();
+    assert.equal(light['--pulse-font'], bodyFont);
+    assert.equal(light['--pulse-mono'], '"Google Sans Code", monospace');
+    assert.equal(light['--pulse-accent'], 'rgb(47 117 195)');
+    assert.equal(light['--pulse-border'], 'rgb(238 238 238)');
+    assert.equal(light['--pulse-hover'], 'rgb(240 240 240)');
+    assert.ok(light['--pulse-card-shadow'].includes('rgba(0,0,0,0.08)'));
+
+    themeClass = 'theme-dark';
+    bodyFont = 'Inter, system-ui, sans-serif';
+    hostVars['--background'] = '#141617';
+    hostVars['--card'] = '#1a1d1f';
+    hostVars['--foreground'] = '#d4be98';
+    hostVars['--primary'] = '#e78a4e';
+    hostVars['--card-border'] = 'rgb(255 255 255 / 0.1)';
+    hostVars['--secondary'] = 'rgb(255 255 255 / 0.08)';
+    controller.setHostTheme({ mode: 'dark', dark: { background: '#141617', primary: '#e78a4e', foregroundOverride: '#d4be98' } });
+    const dark = targetStyle.dump();
+    assert.equal(target.dataset.pulseTheme, 'dark');
+    assert.equal(dark['--pulse-font'], 'Inter, system-ui, sans-serif');
+    assert.equal(dark['--pulse-accent'], 'rgb(231 138 78)');
+    assert.ok(dark['--pulse-card-shadow'].includes('rgba(0,0,0,0.45)'));
+  } finally {
+    controller?.dispose();
+    globalThis.getComputedStyle = prevGetComputed;
+    globalThis.document = prevDocument;
+    if (prevWindow === undefined) delete globalThis.window; else globalThis.window = prevWindow;
+    if (prevCSS === undefined) delete globalThis.CSS; else globalThis.CSS = prevCSS;
+    globalThis.matchMedia = prevMatchMedia;
+    globalThis.MutationObserver = prevObserver;
+  }
+});
+
+test('main entrypoint disables Check for Updates UI in both inline and runtime bridges', () => {
+  const mainUrl = new URL('../main.mjs', import.meta.url).href;
+  const probe = `
+    import assert from 'node:assert/strict';
+    import { readFileSync } from 'node:fs';
+    import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
+    const captured = {};
+    const native = Object.fromEntries(await Promise.all(['node:path', 'node:url', 'node:os'].map(async n => [n, await import(n)])));
+    const context = createContext({
+      process: { env: {}, exit() {}, on() {}, once() {} },
+      console, URL, URLSearchParams,
+      setInterval: () => ({ unref() {} }), clearInterval() {},
+      setTimeout: () => ({ unref() {} }), clearTimeout() {},
+    });
+    const modules = {
+      'node:fs': { readFileSync: f => String(f).endsWith('.cjs') ? 'module.exports = function() {};' : '{}' },
+      'node:http': { createServer() { return { listen() {} }; } },
+      'node:module': { createRequire: () => () => ({ css: () => '' }) },
+      'store.mjs': { MetricsStore: class { dispose() {} } },
+      'usage.mjs': { DesktopUsage: class { dispose() {} }, UsageLedger: class {} },
+      'runtime-ui.mjs': {
+        RuntimeUi: class { health = {}; constructor(opts) { captured.runtimeOpts = opts; } },
+        makeRendererSource: (_i18n, _widget, _theme, _token, _startedAt, prelude) => {
+          captured.prelude = prelude;
+          return '';
+        },
+      },
+      'platform.mjs': { platformPaths: () => ({ data: 'fixture', settings: 'settings.json' }) },
+      'preferences.mjs': { PreferencesStore: class { async snapshot() { return {}; } } },
+      'sidecar-owner.mjs': { SidecarOwner: class { token = 't'; startedAt = 1; } },
+      'host-theme.mjs': { readHostTheme: async () => ({}) },
+      'updater.mjs': { AppUpdater: class {}, releaseRuntimeDirectory() {} },
+    };
+    const entry = new SourceTextModule(readFileSync(new URL(${JSON.stringify(mainUrl)}), 'utf8'), {
+      context, identifier: ${JSON.stringify(mainUrl)}, initializeImportMeta(m) { m.url = ${JSON.stringify(mainUrl)}; },
+    });
+    await entry.link(async spec => {
+      const key = spec.startsWith('node:') ? spec : spec.split('/').at(-1);
+      const values = native[key] || modules[key];
+      return new SyntheticModule(Object.keys(values), function () {
+        for (const [k, v] of Object.entries(values)) this.setExport(k, v);
+      }, { context });
+    });
+    await entry.evaluate();
+    assert.equal(captured.runtimeOpts.updater, null);
+    assert.ok(!captured.prelude.includes('__agPulseUpdateFactory'));
+    assert.ok(captured.prelude.includes('__agPulseUsageFactory'));
+  `;
+  const run = spawnSync(process.execPath, ['--experimental-vm-modules', '--input-type=module', '-e', probe], {
+    cwd: ROOT, encoding: 'utf8',
+  });
+  assert.equal(run.status, 0, run.stderr);
+});
+
+test('usage modal stylesheet avoids hardcoded Microsoft YaHei and sidecar disables right-pane web UI', () => {
+  const usageSrc = readFileSync(join(ROOT, 'compat', 'usage-ui.cjs'), 'utf8');
+  const sidecarManifest = JSON.parse(readFileSync(join(ROOT, 'sidecars', 'panel', 'sidecar.json'), 'utf8'));
+  assert.ok(usageSrc.includes('var(--pulse-font,'));
+  assert.ok(!usageSrc.includes('Microsoft YaHei'));
+  assert.equal(sidecarManifest.has_web_ui, false);
+  assert.equal(sidecarManifest.ui_config, undefined);
+});
+
+test('inline-widget source validates cleanly and contains zero update menu, quota group, or context language markup', () => {
+  assert.equal(typeof installInline, 'function');
+  const src = readFileSync(join(ROOT, 'compat', 'inline-widget.cjs'), 'utf8');
+  assert.ok(!src.includes('__agPulseUpdateFactory'));
+  assert.ok(!src.includes('group-trigger'));
+  assert.ok(!src.includes('five-quota-section'));
+  assert.ok(!src.includes('week-quota-section'));
+  assert.ok(!src.includes('card-language'));
+  assert.ok(!src.includes('language-guide'));
+  assert.ok(!src.includes('Microsoft YaHei'));
+  assert.ok(src.includes('__agPulseUsageFactory'));
+  assert.ok(src.includes('ctx-seg-sys'));
+  assert.ok(src.includes('ctx-seg-tools'));
+  assert.ok(src.includes('ctx-seg-msg'));
+  const lang = createI18n('zh-CN');
+  assert.equal(lang.t('roundsCompact', { rounds: 2, steps: 44 }), '2 轮 44 步');
+  assert.equal(lang.t('contextUsedLabel'), '上下文已用');
+  assert.equal(lang.t('breakdownSystem'), '系统提示词');
+  assert.equal(lang.t('breakdownTools'), '工具调用');
+  assert.equal(lang.t('breakdownMessages'), '对话消息');
+});
+
+test('inline-widget executes mount + render for empty new session (0/0%) and active transcript breakdown + usage modal', async () => {
+  const createdIds = new Map();
+  const matchesCompound = (node, sel) => {
+    const tokens = sel.match(/(?:[#.][a-zA-Z0-9_-]+|\[[^\]]+\]|^[a-zA-Z0-9_-]+|[a-zA-Z0-9_-]+)/g) || [];
+    if (!tokens.length) return false;
+    return tokens.every(tok => {
+      if (tok.startsWith('#')) return node.id === tok.slice(1);
+      if (tok.startsWith('.')) return node.className.split(/\s+/).includes(tok.slice(1));
+      const eqAttr = tok.match(/^\[([^=\]]+)=["']?([^"'\]]+)["']?\]$/);
+      if (eqAttr) {
+        const [, attr, val] = eqAttr;
+        if (attr.startsWith('data-')) {
+          const camel = attr.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+          if (node.dataset?.[camel] === val) return true;
+        }
+        return node.attributes?.get(attr) === val;
+      }
+      const hasAttr = tok.match(/^\[([^\]=]+)\]$/);
+      if (hasAttr) {
+        const attr = hasAttr[1];
+        if (attr.startsWith('data-')) {
+          const camel = attr.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+          if (camel in (node.dataset || {})) return true;
+        }
+        return node.attributes?.has(attr) || false;
+      }
+      return node.tagName === tok.toUpperCase();
+    });
+  };
+  const matchesChain = (node, rootScope, selector) => {
+    const parts = selector.trim().split(/\s+/);
+    if (!matchesCompound(node, parts[parts.length - 1])) return false;
+    let cur = node.parentElement;
+    for (let i = parts.length - 2; i >= 0; i--) {
+      while (cur && cur !== rootScope && !matchesCompound(cur, parts[i])) cur = cur.parentElement;
+      if (!cur || (cur === rootScope && !matchesCompound(cur, parts[i]))) return false;
+      cur = cur.parentElement;
+    }
+    return true;
+  };
+  const collectDescendants = (rootEl) => {
+    const out = [];
+    for (const child of rootEl.children || []) {
+      out.push(child);
+      out.push(...collectDescendants(child));
+    }
+    return out;
+  };
+  const makeNode = (tag, ownerDoc) => {
+    const attrs = new Map();
+    let _id = '';
+    const el = {
+      tagName: String(tag || 'div').toUpperCase(),
+      get id() { return _id; },
+      set id(v) { _id = String(v || ''); if (_id) createdIds.set(_id, el); },
+      hidden: false,
+      disabled: false,
+      open: false,
+      dataset: {},
+      className: '',
+      textContent: '',
+      innerHTML: '',
+      isConnected: true,
+      children: [],
+      style: makeStyleStore(),
+      attributes: attrs,
+      ownerDocument: ownerDoc,
+      parentElement: null,
+      parentNode: null,
+      previousElementSibling: null,
+      nextSibling: null,
+      classList: {
+        add(c) { el.className = `${el.className} ${c}`.trim(); },
+        remove(c) { el.className = el.className.split(/\s+/).filter(x => x && x !== c).join(' '); },
+        toggle(c, on) { if (on) el.classList.add(c); else el.classList.remove(c); },
+        contains(c) { return el.className.split(/\s+/).includes(c); },
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
+      getAttribute(k) { return attrs.get(k) ?? null; },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      append(...nodes) { for (const n of nodes) if (n && typeof n === 'object') { n.parentElement = el; n.parentNode = el; el.children.push(n); } },
+      after(...nodes) { el.parentElement?.append(...nodes); },
+      before() {},
+      insertBefore(n) { el.append(n); return n; },
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      remove() { el.isConnected = false; },
+      closest: () => null,
+      matches: () => false,
+      getClientRects: () => [{ width: 20, height: 20 }],
+      getBoundingClientRect: () => ({ left: 100, top: 300, right: 600, bottom: 328, width: 500, height: 28 }),
+      addEventListener() {},
+      removeEventListener() {},
+      focus() {},
+      scrollIntoView() {},
+      animate: () => ({ cancel() {} }),
+      showPopover() {},
+      hidePopover() {},
+      querySelector(sel) { return el.querySelectorAll(sel)[0] ?? null; },
+      querySelectorAll(sel) {
+        const parts = sel.split(',').map(p => p.trim()).filter(Boolean);
+        return collectDescendants(el).filter(node => parts.some(p => matchesChain(node, el, p)));
+      },
+      attachShadow() {
+        const shadowRoot = makeNode('shadow', ownerDoc);
+        shadowRoot.getElementById = id => createdIds.get(id) ?? null;
+        shadowRoot.activeElement = null;
+        el.shadowRoot = shadowRoot;
+        return shadowRoot;
+      },
+    };
+    return el;
+  };
+  const bodyEl = makeNode('body', null);
+  const rootEl = makeNode('html', null);
+  const doc = {
+    documentElement: rootEl,
+    body: bodyEl,
+    head: makeNode('head', null),
+    hidden: false,
+    defaultView: { innerWidth: 1000, innerHeight: 800, addEventListener() {}, removeEventListener() {} },
+    createElement: tag => tag === 'canvas' ? { width: 1, height: 1, getContext: () => makeCanvasContext() } : makeNode(tag, doc),
+    createTextNode: text => ({ textContent: text }),
+    querySelectorAll: () => [],
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  bodyEl.ownerDocument = doc;
+  rootEl.ownerDocument = doc;
+  doc.head.ownerDocument = doc;
+  doc.defaultView.document = doc;
+
+  const branch = makeNode('div', doc);
+  const row = makeNode('div', doc);
+  const editor = makeNode('div', doc);
+  row.append(branch);
+  row.parentElement = makeNode('div', doc);
+  row.parentElement.append(editor, row);
+
+  let hostMetrics = {
+    connection: 'live',
+    preferences: { language: 'zh-CN', revision: 1, languageGuideDismissed: true },
+    speed: null,
+    usage: { todayTokens: 12000, monthTokens: 340000, today: '2026-11-14', models: [], records: {} },
+  };
+  let metricsCalls = 0;
+
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+    localStorage: globalThis.localStorage,
+    matchMedia: globalThis.matchMedia,
+    getComputedStyle: globalThis.getComputedStyle,
+    MutationObserver: globalThis.MutationObserver,
+    ResizeObserver: globalThis.ResizeObserver,
+    CSS: globalThis.CSS,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+    innerWidth: globalThis.innerWidth,
+    innerHeight: globalThis.innerHeight,
+    location: globalThis.location,
+  };
+  const storage = new Map([['ag-pulse-language', 'zh-CN']]);
+  const mm = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+
+  globalThis.document = doc;
+  globalThis.localStorage = { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, String(v)) };
+  globalThis.matchMedia = mm;
+  globalThis.CSS = { supports: () => true };
+  globalThis.innerWidth = 1000;
+  globalThis.innerHeight = 800;
+  globalThis.location = { pathname: '/c/11111111-1111-1111-1111-111111111111' };
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+  globalThis.getComputedStyle = el => el === bodyEl
+    ? { fontFamily: '"Google Sans Flex", sans-serif', getPropertyValue: () => '' }
+    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: 'light', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
+  globalThis.window = {
+    innerWidth: 1000,
+    innerHeight: 800,
+    matchMedia: mm,
+    addEventListener() {},
+    removeEventListener() {},
+    __agPulseI18nFactory: createI18n,
+    __agPulseThemeFactory: createTheme,
+    __agPulseUsageFactory: () => ({ update() {}, open() {}, syncGuideDismissed() {}, dispose() {}, get isOpen() { return false; } }),
+    __agPulseSurface: {
+      useSharedComposer: false,
+      showEmpty: true,
+      findComposer: () => ({ editor, model: branch, row, branch, box: row.parentElement, kind: 'main' }),
+      conversationId: () => '11111111-1111-1111-1111-111111111111',
+      nativeReserve: () => 0,
+      setMarkup(target, markup) {
+        target.innerHTML = markup;
+        target.children = [];
+        const stack = [target];
+        const voidTags = new Set(['path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'br', 'hr', 'img', 'input', 'meta', 'link']);
+        for (const m of markup.matchAll(/<\/?([a-z0-9-]+)\b([^>]*)>/gi)) {
+          const full = m[0], tag = m[1].toLowerCase(), rawAttrs = m[2];
+          if (full.startsWith('</')) {
+            if (stack.length > 1) stack.pop();
+            continue;
+          }
+          const n = makeNode(tag, doc);
+          for (const am of rawAttrs.matchAll(/([a-z0-9-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/gi)) {
+            const k = am[1];
+            if (!k || k === '/') continue;
+            const v = am[2] ?? am[3] ?? am[4] ?? '';
+            n.setAttribute(k, v);
+            if (k === 'class') n.className = v;
+            else if (k.startsWith('data-')) {
+              const camel = k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+              n.dataset[camel] = v;
+            }
+          }
+          stack[stack.length - 1].append(n);
+          if (!rawAttrs.trim().endsWith('/') && !voidTags.has(tag)) stack.push(n);
+        }
+      },
+    },
+    agPulseHost: {
+      getPreferences: async () => ({ language: 'zh-CN', revision: 1, languageGuideDismissed: true }),
+      setPreferences: async p => ({ ...p, revision: 2 }),
+      getMetrics: async () => { metricsCalls++; return hostMetrics; },
+      report() {},
+    },
+  };
+
+  try {
+    installInline();
+    await new Promise(r => setTimeout(r, 30));
+    assert.ok(metricsCalls >= 1);
+    // 1. Empty new conversation: 0% & 0 everywhere, never '—'
+    assert.equal(createdIds.get('context-percent').textContent, '0%');
+    assert.equal(createdIds.get('context-summary-pct').textContent, '0%');
+    assert.equal(createdIds.get('context-tokens').textContent, '0');
+    assert.equal(createdIds.get('ctx-sys-val').textContent, '0');
+    assert.equal(createdIds.get('ctx-tools-val').textContent, '0');
+    assert.equal(createdIds.get('ctx-msg-val').textContent, '0');
+    assert.equal(createdIds.get('ctx-other-val').textContent, '0');
+    assert.equal(createdIds.get('ctx-other-row').hidden, true);
+    const speedChip = createdIds.get('rounds').parentElement;
+    const cacheChip = createdIds.get('cache-rate').parentElement;
+    assert.equal(speedChip.hidden, false);
+    assert.equal(cacheChip.hidden, false);
+    assert.equal(createdIds.get('usage-today').textContent, '12K');
+    assert.equal(createdIds.get('usage-month').textContent, '340K');
+
+    // 2. Active conversation: push transcript breakdown and trigger timer tick
+    hostMetrics = {
+      ...hostMetrics,
+      speed: {
+        conversationId: '11111111-1111-1111-1111-111111111111',
+        rounds: 2,
+        steps: 44,
+        measuredRequests: 10,
+        tps: 228.4,
+        latestTps: 228.4,
+        latestRateStatus: 'ok',
+        modelSeconds: 206,
+        toolSeconds: 175,
+        ttftSeconds: 0.9,
+        model: 'Claude Sonnet 4.6',
+        counts: { responseOutput: 37811, thinkingOutput: 0 },
+        context: { usedTokens: 105000, maxTokens: 1000000, usedFraction: 0.1, remainingFraction: 0.9, estimated: true },
+        transcriptStats: { status: 'ok', systemTokens: 1400, toolTokens: 7400, userTokens: 18200, assistantTokens: 50000, totalTokens: 77000 },
+        cache: { hitRate: 0.98, totalTokens: 3244160, cachedTokens: 3131648, uncachedTokens: 74701, cacheWriteTokens: 0, outputTokens: 37811, measuredRequests: 10 },
+        tokens: { totalTokens: 3244160, cachedTokens: 3131648, uncachedTokens: 74701, cacheWriteTokens: 0, outputTokens: 37811, measuredRequests: 10, inputRequests: 10, outputRequests: 10, uncachedRequests: 10, cachedRequests: 10, cacheWriteRequests: 10 },
+      },
+    };
+    await new Promise(r => setTimeout(r, 3200));
+    assert.equal(createdIds.get('rounds').textContent, '2 轮 44 步');
+    assert.equal(createdIds.get('tps').textContent, '228');
+    assert.equal(createdIds.get('cache-total').textContent, '3.2M tok');
+    assert.equal(createdIds.get('cache-rate').textContent, '98%');
+    assert.equal(createdIds.get('context-percent').textContent, '10%');
+    assert.equal(createdIds.get('context-tokens').textContent, '~105K / 1M');
+    assert.equal(createdIds.get('ctx-sys-val').textContent, '~1.4K');
+    assert.equal(createdIds.get('ctx-tools-val').textContent, '~7.4K');
+    assert.equal(createdIds.get('ctx-msg-val').textContent, '~68.2K');
+    assert.equal(createdIds.get('ctx-other-val').textContent, '~28K');
+    assert.equal(createdIds.get('ctx-other-row').hidden, false);
+    assert.equal(createdIds.get('ctx-seg-sys').style.getPropertyValue('width'), '0.14%');
+    assert.equal(createdIds.get('ctx-seg-tools').style.getPropertyValue('width'), '0.74%');
+    assert.equal(createdIds.get('ctx-seg-msg').style.getPropertyValue('width'), '6.82%');
+    assert.equal(createdIds.get('ctx-seg-other').style.getPropertyValue('width'), '2.80%');
+    assert.equal(createdIds.get('model-time').textContent, '3分26秒');
+    assert.equal(createdIds.get('tool-time').textContent, '2分55秒');
+    assert.equal(createdIds.get('ttft').textContent, '0.9秒');
+    assert.equal(createdIds.has('card-language-en'), false);
+    assert.equal(createdIds.has('language-guide'), false);
+
+    // 3. Post-compaction conversation: active* + overhead matches usedTokens total fill
+    hostMetrics = {
+      ...hostMetrics,
+      speed: {
+        ...hostMetrics.speed,
+        context: { usedTokens: 86200, maxTokens: 256000, usedFraction: 86200 / 256000, remainingFraction: 1 - 86200 / 256000, estimated: true },
+        transcriptStats: {
+          status: 'ready',
+          systemTokens: 40800, toolTokens: 364200, userTokens: 3000, assistantTokens: 40000, totalTokens: 448000,
+          activeSystemTokens: 8000, activeToolTokens: 50000, activeUserTokens: 200, activeAssistantTokens: 4800, activeTotalTokens: 63000,
+        },
+      },
+    };
+    await new Promise(r => setTimeout(r, 3200));
+    assert.equal(createdIds.get('context-percent').textContent, '34%');
+    assert.equal(createdIds.get('context-tokens').textContent, '~86.2K / 256K');
+    assert.equal(createdIds.get('ctx-sys-val').textContent, '~8K');
+    assert.equal(createdIds.get('ctx-tools-val').textContent, '~50K');
+    assert.equal(createdIds.get('ctx-msg-val').textContent, '~5K');
+    assert.equal(createdIds.get('ctx-other-val').textContent, '~23.2K');
+    const segSum = ['ctx-seg-sys', 'ctx-seg-tools', 'ctx-seg-msg', 'ctx-seg-other']
+      .map(id => parseFloat(createdIds.get(id).style.getPropertyValue('width')))
+      .reduce((a, b) => a + b, 0);
+    assert.ok(Math.abs(segSum - (86200 / 256000) * 100) < 0.05, `Expected total segment percentage ~33.67%, got ${segSum}`);
+
+    // 4. Even if active* raw estimate exceeds usedTokens, proportional capping prevents bar overflow
+    hostMetrics = {
+      ...hostMetrics,
+      speed: {
+        ...hostMetrics.speed,
+        context: { usedTokens: 50000, maxTokens: 256000, usedFraction: 50000 / 256000, remainingFraction: 1 - 50000 / 256000, estimated: true },
+        transcriptStats: {
+          status: 'ready',
+          systemTokens: 10000, toolTokens: 80000, userTokens: 2000, assistantTokens: 8000, totalTokens: 100000,
+          activeSystemTokens: 10000, activeToolTokens: 80000, activeUserTokens: 2000, activeAssistantTokens: 8000, activeTotalTokens: 100000,
+        },
+      },
+    };
+    await new Promise(r => setTimeout(r, 3200));
+    assert.equal(createdIds.get('ctx-sys-val').textContent, '~5K');
+    assert.equal(createdIds.get('ctx-tools-val').textContent, '~40K');
+    assert.equal(createdIds.get('ctx-msg-val').textContent, '~5K');
+  } finally {
+    globalThis.window?.__agPulseDispose?.();
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete globalThis[k];
+      else globalThis[k] = v;
+    }
+  }
+});
+
+test('inline-widget keeps speed chip on live empty new chats (showEmpty: false) and steps compact -> tight before icons-only', async () => {
+  const createdIds = new Map();
+  let fakeClientWidth = 400;
+  const widthForMode = className => className.includes('icons-only') ? 76 : className.includes('tight') ? 230 : className.includes('compact') ? 310 : 350;
+  let hostEl = null;
+
+  const makeNode = tag => {
+    const attrs = new Map();
+    let _id = '';
+    const el = {
+      tagName: String(tag || 'div').toUpperCase(),
+      get id() { return _id; },
+      set id(v) { _id = String(v || ''); if (_id) createdIds.set(_id, el); },
+      hidden: false,
+      disabled: false,
+      open: false,
+      dataset: {},
+      className: '',
+      textContent: '',
+      innerHTML: '',
+      isConnected: true,
+      children: [],
+      style: makeStyleStore(),
+      attributes: attrs,
+      ownerDocument: null,
+      parentElement: null,
+      parentNode: null,
+      previousElementSibling: null,
+      nextSibling: null,
+      get clientWidth() { return fakeClientWidth; },
+      get scrollWidth() { return el.className === 'bar' ? widthForMode(hostEl?.className || '') : fakeClientWidth; },
+      classList: {
+        add(...cs) { for (const c of cs) if (!el.className.split(/\s+/).includes(c)) el.className = `${el.className} ${c}`.trim(); },
+        remove(...cs) { el.className = el.className.split(/\s+/).filter(x => x && !cs.includes(x)).join(' '); },
+        toggle(c, on) { if (on) el.classList.add(c); else el.classList.remove(c); },
+        contains(c) { return el.className.split(/\s+/).includes(c); },
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
+      getAttribute(k) { return attrs.get(k) ?? null; },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      append(...nodes) { for (const n of nodes) if (n && typeof n === 'object') { n.parentElement = el; n.parentNode = el; el.children.push(n); } },
+      after(...nodes) { el.parentElement?.append(...nodes); },
+      before() {},
+      insertBefore(n) { el.append(n); return n; },
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      remove() { el.isConnected = false; },
+      closest: () => null,
+      matches: () => false,
+      getClientRects: () => [{ width: 20, height: 20 }],
+      getBoundingClientRect: () => ({ left: 100, top: 300, right: 100 + fakeClientWidth, bottom: 328, width: fakeClientWidth, height: 28 }),
+      addEventListener() {},
+      removeEventListener() {},
+      focus() {},
+      animate: () => ({ cancel() {} }),
+      showPopover() {},
+      hidePopover() {},
+      querySelector(sel) { return el.querySelectorAll(sel)[0] ?? null; },
+      querySelectorAll(sel) {
+        const list = [];
+        const walk = n => { for (const c of n.children || []) { list.push(c); walk(c); } };
+        walk(el);
+        const matchTok = (n, tok) => {
+          if (tok.startsWith('.')) return String(n.className || '').split(/\s+/).includes(tok.slice(1));
+          if (tok.startsWith('#')) return n.id === tok.slice(1);
+          const eq = tok.match(/^\[([^=\]]+)=["']?([^"'\]]+)["']?\]$/);
+          if (eq) {
+            const [, k, v] = eq;
+            if (k.startsWith('data-')) { const c = k.slice(5).replace(/-([a-z])/g, (_, x) => x.toUpperCase()); if (n.dataset?.[c] === v) return true; }
+            return n.attributes?.get(k) === v;
+          }
+          const has = tok.match(/^\[([^\]=]+)\]$/);
+          if (has) {
+            const k = has[1];
+            if (k.startsWith('data-')) { const c = k.slice(5).replace(/-([a-z])/g, (_, x) => x.toUpperCase()); if (c in (n.dataset || {})) return true; }
+            return n.attributes?.has(k) || false;
+          }
+          return n.tagName === tok.toUpperCase();
+        };
+        const matchOne = (n, expr) => (expr.match(/(?:[#.][a-zA-Z0-9_-]+|\[[^\]]+\]|[a-zA-Z0-9_-]+)/g) || []).every(tok => matchTok(n, tok));
+        return list.filter(n => sel.split(',').map(s => s.trim()).filter(Boolean).some(part => {
+          const chain = part.split(/\s+/);
+          if (!matchOne(n, chain.at(-1))) return false;
+          let cur = n.parentElement;
+          for (let i = chain.length - 2; i >= 0; i--) {
+            while (cur && cur !== el && !matchOne(cur, chain[i])) cur = cur.parentElement;
+            if (!cur || (cur === el && !matchOne(cur, chain[i]))) return false;
+            cur = cur.parentElement;
+          }
+          return true;
+        }));
+      },
+      attachShadow() {
+        const sr = makeNode('shadow');
+        sr.getElementById = id => createdIds.get(id) ?? null;
+        sr.activeElement = null;
+        el.shadowRoot = sr;
+        hostEl = el;
+        return sr;
+      },
+    };
+    return el;
+  };
+  const bodyEl = makeNode('body'), rootEl = makeNode('html');
+  const doc = {
+    documentElement: rootEl, body: bodyEl, head: makeNode('head'), hidden: false,
+    defaultView: { innerWidth: 1000, innerHeight: 800, addEventListener() {}, removeEventListener() {} },
+    createElement: tag => tag === 'canvas' ? { width: 1, height: 1, getContext: () => makeCanvasContext() } : makeNode(tag),
+    createTextNode: text => ({ textContent: text }),
+    querySelectorAll: () => [], addEventListener() {}, removeEventListener() {},
+  };
+  const branch = makeNode('div'), row = makeNode('div'), editor = makeNode('div');
+  row.append(branch);
+  row.parentElement = makeNode('div');
+  row.parentElement.append(editor, row);
+
+  const prev = {
+    window: globalThis.window, document: globalThis.document, localStorage: globalThis.localStorage,
+    matchMedia: globalThis.matchMedia, getComputedStyle: globalThis.getComputedStyle,
+    MutationObserver: globalThis.MutationObserver, ResizeObserver: globalThis.ResizeObserver, Element: globalThis.Element,
+    CSS: globalThis.CSS, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame,
+    innerWidth: globalThis.innerWidth, innerHeight: globalThis.innerHeight, location: globalThis.location,
+  };
+  const resizeListeners = [];
+  globalThis.document = doc;
+  globalThis.Element = function Element() {};
+  globalThis.localStorage = { getItem: () => 'zh-CN', setItem() {} };
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  globalThis.CSS = { supports: () => true };
+  globalThis.innerWidth = 1000;
+  globalThis.innerHeight = 800;
+  globalThis.location = { pathname: '/' };
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+  globalThis.getComputedStyle = el => el === bodyEl
+    ? { fontFamily: '"Google Sans Flex", sans-serif', getPropertyValue: () => '' }
+    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: 'light', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
+  globalThis.window = {
+    innerWidth: 1000, innerHeight: 800,
+    matchMedia: globalThis.matchMedia,
+    addEventListener(type, fn) { if (type === 'resize') resizeListeners.push(fn); },
+    removeEventListener() {},
+    __agPulseI18nFactory: createI18n,
+    __agPulseThemeFactory: createTheme,
+    __agPulseUsageFactory: () => ({ update() {}, open() {}, syncGuideDismissed() {}, dispose() {}, get isOpen() { return false; } }),
+    __agPulseSurface: {
+      useSharedComposer: false,
+      showEmpty: false,
+      findComposer: () => ({ editor, model: branch, row, branch, box: row.parentElement, kind: 'main' }),
+      conversationId: () => '',
+      nativeReserve: () => 0,
+      setMarkup(target, markup) {
+        target.innerHTML = markup;
+        target.children = [];
+        const stack = [target];
+        const voidTags = new Set(['path', 'br', 'hr', 'img', 'input', 'meta', 'link']);
+        for (const m of markup.matchAll(/<\/?([a-z0-9-]+)\b([^>]*)>/gi)) {
+          const full = m[0], tag = m[1].toLowerCase(), rawAttrs = m[2];
+          if (full.startsWith('</')) { if (stack.length > 1) stack.pop(); continue; }
+          const n = makeNode(tag);
+          for (const am of rawAttrs.matchAll(/([a-z0-9-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/gi)) {
+            const k = am[1]; if (!k || k === '/') continue;
+            const v = am[2] ?? am[3] ?? am[4] ?? '';
+            n.setAttribute(k, v);
+            if (k === 'class') n.className = v;
+            else if (k.startsWith('data-')) n.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v;
+          }
+          stack[stack.length - 1].append(n);
+          if (!rawAttrs.trim().endsWith('/') && !voidTags.has(tag)) stack.push(n);
+        }
+      },
+    },
+    agPulseHost: {
+      getPreferences: async () => ({ language: 'zh-CN', revision: 1 }),
+      setPreferences: async p => p,
+      getMetrics: async () => ({ connection: 'live', preferences: { language: 'zh-CN', revision: 1 }, speed: null, usage: null }),
+      report() {},
+    },
+  };
+  globalThis.requestAnimationFrame = fn => setTimeout(fn, 0);
+  globalThis.cancelAnimationFrame = id => clearTimeout(id);
+
+  try {
+    installInline();
+    await new Promise(r => setTimeout(r, 30));
+    assert.equal(createdIds.get('rounds').parentElement.hidden, false);
+    assert.equal(createdIds.get('cache-rate').parentElement.hidden, false);
+    assert.equal(hostEl.dataset.density, 'full');
+
+    // Medium space (~330px) drops gently to 'compact' (100% text preserved)
+    fakeClientWidth = 330;
+    for (const fn of resizeListeners) fn();
+    await new Promise(r => setTimeout(r, 30));
+    assert.equal(hostEl.dataset.density, 'compact');
+
+    // Tight space (~260px) lands on 'tight' (numbers preserved), NOT icons-only
+    fakeClientWidth = 260;
+    for (const fn of resizeListeners) fn();
+    await new Promise(r => setTimeout(r, 30));
+    assert.equal(hostEl.dataset.density, 'tight');
+
+    // Only ultra-narrow (<230px) drops to icons-only
+    fakeClientWidth = 90;
+    for (const fn of resizeListeners) fn();
+    await new Promise(r => setTimeout(r, 30));
+    assert.equal(hostEl.dataset.density, 'icons');
+
+    // Restoring width recovers back to 'full'
+    fakeClientWidth = 400;
+    for (const fn of resizeListeners) fn();
+    await new Promise(r => setTimeout(r, 30));
+    assert.equal(hostEl.dataset.density, 'full');
+  } finally {
+    globalThis.window?.__agPulseDispose?.();
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete globalThis[k];
+      else globalThis[k] = v;
+    }
+  }
+});
+
+test('usage-ui removes weekly/composition views and coordinates unified date filters', () => {
+  const createUsageDashboard = require('../../../compat/usage-ui.cjs');
+  assert.equal(typeof createUsageDashboard, 'function');
+  const src = readFileSync(join(ROOT, 'compat', 'usage-ui.cjs'), 'utf8');
+  assert.ok(!src.includes('ANTIGRATIVE DASHBOARD'));
+  assert.ok(!src.includes('›</button>'));
+  assert.ok(!src.includes('‹</button>'));
+  assert.ok(src.includes('viewBox="0 -960 960 960"'));
+  assert.ok(src.includes('height:auto;max-height:min(840px'));
+
+  const idMap = new Map();
+  let doc = null;
+  const makeUsageEl = tag => {
+    const attrs = new Map();
+    const listeners = new Map();
+    let _id = '';
+    const el = {
+      tagName: String(tag || 'div').toUpperCase(),
+      get id() { return _id; },
+      set id(v) { _id = String(v || ''); if (_id) idMap.set(_id, el); },
+      get ownerDocument() { return doc; },
+      parentNode: null,
+      parentElement: null,
+      hidden: false,
+      disabled: false,
+      open: false,
+      tabIndex: 0,
+      dataset: {},
+      textContent: '',
+      innerHTML: '',
+      title: '',
+      isConnected: true,
+      children: [],
+      style: makeStyleStore(),
+      attributes: attrs,
+      firstElementChild: null,
+      get lastElementChild() { return el.children.at(-1) ?? null; },
+      setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
+      getAttribute(k) { return attrs.get(k) ?? null; },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      append(...nodes) {
+        for (const n of nodes) if (n && typeof n === 'object') { n.parentElement = el; n.parentNode = el; el.children.push(n); }
+        el.firstElementChild = el.children.find(c => c.tagName) ?? null;
+      },
+      before() {},
+      after() {},
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      remove() {},
+      closest: () => null,
+      matches: () => false,
+      showPopover() { el.open = true; },
+      hidePopover() { el.open = false; },
+      focus() {},
+      animate: () => ({ cancel() {} }),
+      addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
+      removeEventListener() {},
+      dispatch(type) { for (const fn of listeners.get(type) || []) fn({ target: el, preventDefault() {}, stopPropagation() {} }); },
+      getClientRects: () => [{ width: 20, height: 20 }],
+      getBoundingClientRect: () => ({ left: 0, top: 0, right: 600, bottom: 400, width: 600, height: 400 }),
+      querySelector(sel) { return el.querySelectorAll(sel)[0] ?? null; },
+      querySelectorAll(sel) {
+        const list = [];
+        const walk = node => { for (const c of node.children || []) { list.push(c); walk(c); } };
+        walk(el);
+        const parts = sel.split(',').map(p => p.trim());
+        return list.filter(n => parts.some(p => {
+          if (p.startsWith('.')) return String(n.className || '').split(/\s+/).includes(p.slice(1));
+          const m = p.match(/^\[([a-z-]+)\]$/);
+          if (m) return n.attributes?.has(m[1]);
+          return n.tagName === p.toUpperCase();
+        }));
+      },
+      attachShadow() {
+        const sr = makeUsageEl('shadow');
+        sr.getElementById = id => idMap.get(id) ?? null;
+        return sr;
+      },
+    };
+    return el;
+  };
+  doc = {
+    defaultView: { addEventListener() {}, removeEventListener() {}, innerWidth: 1200, innerHeight: 900 },
+    createElement: tag => tag === 'canvas' ? { width: 1, height: 1, getContext: () => makeCanvasContext() } : makeUsageEl(tag),
+    createTextNode: text => ({ textContent: text }),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const prevDoc = globalThis.document, prevWin = globalThis.window, prevComputed = globalThis.getComputedStyle, prevMO = globalThis.MutationObserver;
+  globalThis.document = doc;
+  globalThis.window = { addEventListener() {}, removeEventListener() {}, innerWidth: 1200, innerHeight: 900 };
+  globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  const setMarkup = (target, markup) => {
+    target.innerHTML = markup;
+    target.children = [];
+    const stack = [target];
+    const voidTags = new Set(['path', 'i', 'br']);
+    for (const m of markup.matchAll(/<\/?([a-z0-9-]+)\b([^>]*)>/gi)) {
+      const full = m[0], tag = m[1].toLowerCase(), rawAttrs = m[2];
+      if (full.startsWith('</')) { if (stack.length > 1) stack.pop(); continue; }
+      const n = makeUsageEl(tag);
+      for (const am of rawAttrs.matchAll(/([a-z0-9-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/gi)) {
+        const k = am[1]; if (!k || k === '/') continue;
+        const v = am[2] ?? am[3] ?? am[4] ?? '';
+        n.setAttribute(k, v);
+        if (k === 'class') n.className = v;
+        else if (k.startsWith('data-')) n.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v;
+      }
+      stack[stack.length - 1].append(n);
+      if (!rawAttrs.trim().endsWith('/') && !voidTags.has(tag)) stack.push(n);
+    }
+  };
+  try {
+    const root = makeUsageEl('div');
+    const lang = createI18n('zh-CN');
+    const dash = createUsageDashboard({ root, language: lang, setMarkup, hostLabel: 'Antigravity', guideDismissed: false, onDismissGuide: async () => {}, onLanguage: async () => {}, onRefresh: async () => {} });
+    dash.open({
+      accountKey: 'acct',
+      today: '2026-11-14',
+      firstDate: '2025-12-20',
+      timeZone: 'Asia/Shanghai',
+      requests: 123,
+      todayTokens: 19600,
+      weekTokens: 40000,
+      monthTokens: 120000,
+      totalTokens: 900000,
+      models: [
+        'Gemini 3.8 Flash (High)',
+        'Gemini 3.8 Flash (Medium)',
+        'gemini-3.8-flash-tiered',
+        'gemini-3.7-flash',
+        'gemini-3.7-flash-exp-b',
+        'gemini-3.7-flash-control',
+        'Gemini 3.7 Flash (High)',
+        'Gemini 4 Hydrogen (High)',
+        'Gemini 4 Hydrogen (XHigh)',
+        'gemini-4-hydrogen-high',
+        'gemini-4-argon-trial',
+        'Claude Sonnet 4.6 (Thinking)',
+        'GPT-OSS 120B (Medium)',
+        'Orchestrator (Argon)',
+      ],
+      days: [
+        {
+          date: '2025-12-20',
+          models: {
+            'gemini-3.7-flash': { total: 1000, requests: 1, uncached: 200, cacheRead: 700, cacheWrite: 0, output: 100 },
+          },
+        },
+        {
+          date: '2026-09-10',
+          models: {
+            'gemini-3.7-flash-exp-b': { total: 2000, requests: 2, uncached: 400, cacheRead: 1400, cacheWrite: 0, output: 200 },
+          },
+        },
+        {
+          date: '2026-11-14',
+          models: {
+            'Gemini 3.8 Flash (High)': { total: 6000, requests: 3, uncached: 1000, cacheRead: 4500, cacheWrite: 0, output: 500 },
+            'Gemini 3.8 Flash (Medium)': { total: 3000, requests: 2, uncached: 500, cacheRead: 2200, cacheWrite: 0, output: 300 },
+            'gemini-3.8-flash-tiered': { total: 1000, requests: 1, uncached: 200, cacheRead: 700, cacheWrite: 0, output: 100 },
+            'gemini-3.7-flash': { total: 1500, requests: 1, uncached: 300, cacheRead: 1000, cacheWrite: 0, output: 200 },
+            'gemini-3.7-flash-control': { total: 500, requests: 1, uncached: 100, cacheRead: 350, cacheWrite: 0, output: 50 },
+            'Gemini 3.7 Flash (High)': { total: 600, requests: 1, uncached: 100, cacheRead: 450, cacheWrite: 0, output: 50 },
+            'Gemini 4 Hydrogen (High)': { total: 2000, requests: 1, uncached: 400, cacheRead: 1400, cacheWrite: 0, output: 200 },
+            'Gemini 4 Hydrogen (XHigh)': { total: 1000, requests: 1, uncached: 200, cacheRead: 700, cacheWrite: 0, output: 100 },
+            'gemini-4-hydrogen-high': { total: 1000, requests: 1, uncached: 200, cacheRead: 700, cacheWrite: 0, output: 100 },
+            'gemini-4-argon-trial': { total: 500, requests: 1, uncached: 100, cacheRead: 350, cacheWrite: 0, output: 50 },
+            'Claude Sonnet 4.6 (Thinking)': { total: 1200, requests: 1, uncached: 200, cacheRead: 900, cacheWrite: 0, output: 100 },
+            'GPT-OSS 120B (Medium)': { total: 900, requests: 1, uncached: 150, cacheRead: 650, cacheWrite: 0, output: 100 },
+            'Orchestrator (Argon)': { total: 900, requests: 1, uncached: 150, cacheRead: 650, cacheWrite: 0, output: 100 },
+          },
+        },
+      ],
+    }, null);
+    assert.equal(idMap.get('title').textContent, '用量统计');
+    // Tabs, bottom cards, weekly heatmap, composition toggle, and old nav arrows are all removed
+    for (const removedId of [
+      'overview-tab',
+      'details-tab',
+      'overview-models',
+      'selection-title',
+      'heat-controls',
+      'chart-mode-controls',
+      'previous',
+      'next',
+      'today-jump',
+    ]) {
+      assert.equal(idMap.get(removedId), undefined, `${removedId} should not exist`);
+    }
+
+    // Top KPI cards + annual heatmap + unified breakdown are all rendered
+    assert.equal(idMap.get('totals').children.length, 4);
+    assert.ok(idMap.get('heat-summary').textContent.includes('命中'));
+    assert.ok(idMap.get('usage-intro-text').textContent.includes('UTC+8') || idMap.get('usage-intro-text').textContent.includes('北京时间'));
+
+    // Default range is rolling 30 days ending on 2026-11-14
+    const filterButtons = idMap.get('date-filter').querySelectorAll('[data-range]');
+    const preset30d = filterButtons.find(b => b.dataset.range === '30d');
+    const preset7d = filterButtons.find(b => b.dataset.range === '7d');
+    assert.equal(preset30d.getAttribute('aria-pressed'), 'true');
+    assert.equal(idMap.get('range-display').textContent, '2026-10-16 ~ 2026-11-14');
+    assert.equal(idMap.get('month-preset-label').textContent, '2026-11');
+    assert.equal(idMap.get('year-preset').textContent, '2026年');
+
+    const rollingXLabels = idMap.get('plot').querySelectorAll('.x-label').map(n => n.textContent);
+    assert.equal(rollingXLabels.length, 30);
+    assert.equal(rollingXLabels[0], '10/16');
+    assert.ok(rollingXLabels.includes('11/1'));
+    assert.ok(rollingXLabels.includes('14'));
+    const todayCol = idMap.get('plot').querySelectorAll('.bar-column').find(c => c.dataset.from === '2026-11-14');
+    assert.equal(todayCol?.dataset.today, 'true');
+
+    // Models in 30d window deduplicate thinking tiers & slugs into 7 canonical rows
+    const cellText = el => el ? (el.textContent || (el.children || []).map(cellText).join('')) : '';
+    const rowModels = idMap.get('table-body').children.map(tr => cellText(tr.children[0]));
+    assert.deepEqual(rowModels, [
+      'Gemini 3.8 Flash',
+      'Gemini 4 Hydrogen',
+      'Gemini 3.7 Flash',
+      'Claude Sonnet 4.6',
+      'GPT-OSS 120B',
+      'Orchestrator (Argon)',
+      'Gemini 4 Argon',
+    ]);
+    assert.equal(cellText(idMap.get('table-body').children[0].children[2]), '10,000');
+    assert.equal(idMap.get('table-head').children.length, 9);
+
+    // 7-day rolling preset
+    preset7d.dispatch('click');
+    assert.equal(preset7d.getAttribute('aria-pressed'), 'true');
+    assert.equal(idMap.get('range-display').textContent, '2026-11-08 ~ 2026-11-14');
+    assert.equal(idMap.get('plot').querySelectorAll('.bar-column').length, 7);
+
+    // Month preset + month popover selection
+    idMap.get('month-preset').dispatch('click');
+    assert.equal(idMap.get('month-preset').getAttribute('aria-pressed'), 'true');
+    assert.equal(idMap.get('range-display').textContent, '2026-11-01 ~ 2026-11-30');
+    const novLabels = idMap.get('plot').querySelectorAll('.x-label').map(n => n.textContent);
+    assert.equal(novLabels.length, 30);
+    assert.ok(novLabels.includes('14'));
+
+    const septOption = idMap.get('month-menu').children.find(o => o.dataset.month === '2026-09');
+    assert.ok(septOption);
+    septOption.dispatch('click');
+    assert.equal(idMap.get('range-display').textContent, '2026-09-01 ~ 2026-09-30');
+    assert.equal(idMap.get('month-preset-label').textContent, '2026-09');
+    assert.deepEqual(
+      idMap.get('table-body').children.map(tr => cellText(tr.children[0])),
+      ['Gemini 3.7 Flash'],
+    );
+
+    // Year preset + clicking a month bar drills down to daily view for that month
+    idMap.get('year-preset').dispatch('click');
+    assert.equal(idMap.get('year-preset').getAttribute('aria-pressed'), 'true');
+    assert.equal(idMap.get('range-display').textContent, '2026-01-01 ~ 2026-12-31');
+    assert.equal(idMap.get('plot').dataset.mode, 'year');
+    const monthCols = idMap.get('plot').querySelectorAll('.bar-column');
+    assert.equal(monthCols.length, 12);
+    const novMonthBar = monthCols.find(c => c.dataset.from === '2026-11-01');
+    assert.ok(novMonthBar);
+    novMonthBar.dispatch('click');
+    assert.equal(idMap.get('month-preset').getAttribute('aria-pressed'), 'true');
+    assert.equal(idMap.get('range-display').textContent, '2026-11-01 ~ 2026-11-30');
+
+    // Annual heatmap month header & day tile cross-filter Breakdown
+    const septMonthHeader = idMap.get('months').children.find(b => b.dataset.ym === '2026-09');
+    assert.ok(septMonthHeader);
+    septMonthHeader.dispatch('click');
+    assert.equal(idMap.get('range-display').textContent, '2026-09-01 ~ 2026-09-30');
+
+    preset30d.dispatch('click');
+    const septCell = idMap.get('heat').children.find(b => b.dataset.from === '2026-09-10');
+    assert.ok(septCell);
+    septCell.dispatch('click');
+    assert.equal(idMap.get('range-display').textContent, '2026-09-01 ~ 2026-09-30');
+    const septBar = idMap.get('plot').querySelectorAll('.bar-column').find(c => c.dataset.from === '2026-09-10');
+    assert.equal(septBar?.dataset.active, 'true');
+
+    // Custom date range popover
+    idMap.get('custom-preset').dispatch('click');
+    assert.equal(idMap.get('custom-menu').open, true);
+    idMap.get('custom-from').value = '2026-09-01';
+    idMap.get('custom-to').value = '2026-09-15';
+    idMap.get('custom-apply').dispatch('click');
+    assert.equal(idMap.get('custom-preset').getAttribute('aria-pressed'), 'true');
+    assert.equal(idMap.get('range-display').textContent, '2026-09-01 ~ 2026-09-15');
+    assert.equal(idMap.get('plot').querySelectorAll('.bar-column').length, 15);
+    assert.deepEqual(
+      idMap.get('table-body').children.map(tr => cellText(tr.children[0])),
+      ['Gemini 3.7 Flash'],
+    );
+
+    // Selecting an earlier year in top #year switches 30d/7d Breakdown to that year
+    preset30d.dispatch('click');
+    const year2025 = idMap.get('year-menu').children.find(o => o.dataset.year === '2025');
+    assert.ok(year2025);
+    year2025.dispatch('click');
+    assert.equal(idMap.get('year-label').textContent, '2025');
+    assert.equal(idMap.get('year-preset').textContent, '2025年');
+    assert.equal(idMap.get('year-preset').getAttribute('aria-pressed'), 'true');
+    assert.equal(idMap.get('range-display').textContent, '2025-01-01 ~ 2025-12-31');
+    assert.deepEqual(
+      idMap.get('table-body').children.map(tr => cellText(tr.children[0])),
+      ['Gemini 3.7 Flash'],
+    );
+
+    dash.dispose();
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.window = prevWin;
+    globalThis.getComputedStyle = prevComputed;
+    globalThis.MutationObserver = prevMO;
+  }
+});

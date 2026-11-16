@@ -1,0 +1,10 @@
+{
+  "command": "node",
+  "args": [
+    "main.mjs"
+  ],
+  "restart_policy": "always",
+  "display_name": "Antigravity Context",
+  "description": "Background metrics collector and inline composer widget injector",
+  "has_web_ui": false
+}
