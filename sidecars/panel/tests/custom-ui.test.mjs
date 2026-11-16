@@ -805,6 +805,7 @@ test('usage-ui removes weekly/composition views and coordinates unified date fil
   assert.ok(src.includes('height:auto;max-height:min(840px'));
 
   const idMap = new Map();
+  const focusCalls = [];
   let doc = null;
   const makeUsageEl = tag => {
     const attrs = new Map();
@@ -847,7 +848,7 @@ test('usage-ui removes weekly/composition views and coordinates unified date fil
       matches: () => false,
       showPopover() { el.open = true; },
       hidePopover() { el.open = false; },
-      focus() {},
+      focus() { focusCalls.push(el); },
       animate: () => ({ cancel() {} }),
       addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
       removeEventListener() {},
@@ -1116,6 +1117,7 @@ test('usage-ui header update button shows red dot on available update and suppor
   const createUsageDashboard = require('../../../compat/usage-ui.cjs');
   const createI18n = require('../../../compat/i18n.cjs');
   const idMap = new Map();
+  const focusCalls = [];
   let doc = null;
   const makeEl = tag => {
     const attrs = new Map();
@@ -1158,7 +1160,7 @@ test('usage-ui header update button shows red dot on available update and suppor
       matches: () => false,
       showPopover() { el.open = true; },
       hidePopover() { el.open = false; },
-      focus() {},
+      focus() { focusCalls.push(el); },
       animate: () => ({ cancel() {} }),
       addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
       removeEventListener() {},
@@ -1238,6 +1240,24 @@ test('usage-ui header update button shows red dot on available update and suppor
     });
     const usageData = { today: '2026-11-16', firstDate: '2026-11-16', timeZone: 'Asia/Shanghai', requests: 1, models: [], days: [] };
     dash.open(usageData, null, { state: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' });
+    assert.equal(focusCalls.at(-1)?.className, 'page', 'opening dashboard should focus page container rather than #locale');
+    assert.equal(idMap.get('action-tip').hidden, true);
+    assert.equal(idMap.get('version-tag').hidden, false);
+    assert.equal(idMap.get('version-tag').textContent, 'v1.0.0');
+    dash.update(usageData, { state: 'idle' });
+    assert.equal(idMap.get('version-tag').hidden, true);
+    dash.update(usageData, { state: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' });
+    assert.equal(idMap.get('version-tag').hidden, false);
+    assert.equal(idMap.get('version-tag').textContent, 'v1.0.0');
+    idMap.get('locale').dispatch('focus');
+    assert.equal(idMap.get('action-tip').hidden, true, 'programmatic focus without :focus-visible must not show tooltip');
+    const prevLocaleMatches = idMap.get('locale').matches;
+    idMap.get('locale').matches = sel => sel === ':focus-visible';
+    idMap.get('locale').dispatch('focus');
+    assert.equal(idMap.get('action-tip').hidden, false);
+    idMap.get('locale').dispatch('blur');
+    idMap.get('locale').matches = prevLocaleMatches;
+    assert.equal(idMap.get('action-tip').hidden, true);
     assert.equal(idMap.get('update-dot').hidden, true);
     assert.equal(idMap.get('timezone').textContent, '本机存储');
     assert.equal(idMap.get('sync-prog-wrap').hidden, true);
