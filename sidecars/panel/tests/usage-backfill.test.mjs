@@ -163,3 +163,13 @@ test('old completed checkpoints recheck once to discover omitted delegated histo
  const usage=tracker(t,store,ledger);await usage.sync();assert.equal(reads,1);
  await usage.sync();assert.equal(reads,1,'The migration does not repeatedly reread ordinary settled history');
 });
+
+test('needsInitialSync is true only before a scope has a backfill checkpoint',async t=>{
+ const {ledger}=await setup(t);const store=baseStore();
+ const usage=tracker(t,store,ledger);
+ assert.equal(await usage.needsInitialSync(),true);
+ await usage.sync();
+ assert.equal(await usage.needsInitialSync(),false);
+ const restarted=tracker(t,store,new UsageLedger(ledger.directory));
+ assert.equal(await restarted.needsInitialSync(),false);
+});

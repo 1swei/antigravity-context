@@ -105,17 +105,18 @@ for(const host of ['app','preview'])test(`${host} real entrypoint keeps unknown 
   }
 });
 
-test('app real entrypoint uses incremental check on usageCheck without full sync(true)', () => {
+test('app real entrypoint skips history sync on usageCheck once initialized, and runs only on first open', () => {
   const url = new URL('../main.mjs', import.meta.url).href;
   const checkFixture = async () => {
     const { SourceTextModule, SyntheticModule, createContext } = await import('node:vm');
     const { readFile } = await import('node:fs/promises');
-    const state = { syncs: [], snapshots: [] };
+    const state = { syncs: [], snapshots: [], initial: false };
     let snapshot;
     class Owner { token='fixture'; startedAt=1; async claim(){return true;} owns(){return true;} async isOwner(){return true;} watch(){} stop(){} }
     class Store { constructor(c,o){} async snapshot(){return {connection:'live'};} dispose(){} }
     class Usage {
       pending = null;
+      async needsInitialSync(){ return state.initial; }
       async snapshot(opts){
         state.snapshots.push(opts??null);
         if (opts?.sync) {
@@ -154,14 +155,20 @@ test('app real entrypoint uses incremental check on usageCheck without full sync
       return new SyntheticModule(Object.keys(values), function(){ for (const [k,v] of Object.entries(values)) this.setExport(k,v); }, { context });
     });
     await entry.evaluate();
-    const res = await snapshot({ conversationId: 'fixture', force: true, usageCheck: true });
-    return { syncs: state.syncs, snapshots: state.snapshots, syncing: res.usage.syncing };
+    const alreadySynced = await snapshot({ conversationId: 'fixture', force: true, usageCheck: true });
+    const afterInitialized = [...state.snapshots];
+    state.snapshots.length = 0;
+    state.initial = true;
+    const firstOpen = await snapshot({ conversationId: 'fixture', force: true, usageCheck: true });
+    return { syncs: state.syncs, afterInitialized, alreadySyncing: alreadySynced.usage.syncing, firstOpenSnapshots: state.snapshots, firstSyncing: firstOpen.usage.syncing };
   };
   const script = `const url=${JSON.stringify(url)};(${checkFixture.toString()})().then(v=>console.log(JSON.stringify(v)))`;
   const result = spawnSync(process.execPath, ['--experimental-vm-modules', '--input-type=module', '-e', script], { encoding: 'utf8', timeout: 15000, windowsHide: true });
   assert.equal(result.status, 0, result.stderr);
   const out = JSON.parse(result.stdout.trim());
   assert.deepEqual(out.syncs, []);
-  assert.deepEqual(out.snapshots, [{ sync: true }, { sync: false }]);
-  assert.equal(out.syncing, false);
+  assert.deepEqual(out.afterInitialized, [{ sync: false }]);
+  assert.equal(out.alreadySyncing, false);
+  assert.deepEqual(out.firstOpenSnapshots, [{ sync: true }, { sync: false }]);
+  assert.equal(out.firstSyncing, false);
 });

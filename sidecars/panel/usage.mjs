@@ -111,6 +111,10 @@ export class UsageLedger{
     this._barrier=Promise.allSettled([gate,...this._writes]).then(()=>{});
     return tracked;
   }
+  async hasBackfillState(scope,host){
+    if(!HASH.test(scope)||!['app','ide'].includes(host))return false;
+    try{return (await stat(join(this.directory,scope,'backfill-v1.json'))).isFile();}catch{return false;}
+  }
   async backfillState(scope,host,{preferred=[]}={}){
     if(!HASH.test(scope)||!['app','ide'].includes(host))throw Error('Invalid backfill scope');
     await this.queue.catch(()=>{});
@@ -674,6 +678,11 @@ export class DesktopUsage{
     if(completePass){this.fullMissing=missing;if(this.fullRemaining.size>0)more=true;else this.fullJournal=null;}
     const confirmed=[...this.passFailures].filter(id=>(journal[hash(id)]?.failures||this.readFailures.get(id)?.failures||0)>=2).length;
     return {current,missing:missing+this.passFailures.size,confirmed,retrying:missing+this.passFailures.size-confirmed,more,partial};
+  }
+  async needsInitialSync(){
+    const scope=this.store.identity;
+    if(!scope||!this.owns()||this.disposed||this.lastSync>0||this.pending||this.continuation)return false;
+    return !(this.host&&await this.ledger.hasBackfillState(scope,this.host));
   }
   async snapshot({sync=true}={}){
     this.refreshLiveScope();

@@ -38,8 +38,9 @@ const metrics = async input => {
   if(ownership&&!await ownership.isOwner())throw Error('Sidecar ownership changed');
   runtimeSettings();
   const base=await store.snapshot(input);
-  const forceSync=input?.usageSync===true,checkSync=!forceSync&&input?.usageCheck===true;
+  const forceSync=input?.usageSync===true;
   if(forceSync)void usage.sync(true);
+  const checkSync=!forceSync&&input?.usageCheck===true&&typeof usage.needsInitialSync==='function'&&await usage.needsInitialSync();
   let usageData=await usage.snapshot({sync:forceSync||checkSync});
   if(checkSync&&usageData?.syncing&&usage.pending){
     await Promise.race([usage.pending.catch(()=>{}),new Promise(resolve=>setTimeout(resolve,250))]);
