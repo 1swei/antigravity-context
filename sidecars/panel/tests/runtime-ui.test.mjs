@@ -39,8 +39,10 @@ test('binding requests allow historical sync only with an explicit boolean true'
   assert.throws(() => validatedInput([]));
   assert.deepEqual(validatedInput({conversationId:null,force:true,usageSync:true,extra:'discard'}),{conversationId:null,force:true,usageSync:true});
   assert.deepEqual(validatedInput({conversationId:null,force:true,usageCheck:true,extra:'discard'}),{conversationId:null,force:true,usageCheck:true});
+  assert.deepEqual(validatedInput({conversationId:null,force:true,usageRefresh:true,extra:'discard'}),{conversationId:null,force:true,usageRefresh:true});
   for(const usageSync of [false,1,'true',{},null])assert.deepEqual(validatedInput({conversationId:null,usageSync}),{conversationId:null,force:false});
   for(const usageCheck of [false,1,'true',{},null])assert.deepEqual(validatedInput({conversationId:null,usageCheck}),{conversationId:null,force:false});
+  for(const usageRefresh of [false,1,'true',{},null])assert.deepEqual(validatedInput({conversationId:null,usageRefresh}),{conversationId:null,force:false});
 });
 
 test('app update replaces the renderer port and reconnects without archive edits', async () => {

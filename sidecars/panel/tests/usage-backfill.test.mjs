@@ -173,3 +173,36 @@ test('needsInitialSync is true only before a scope has a backfill checkpoint',as
  const restarted=tracker(t,store,new UsageLedger(ledger.directory));
  assert.equal(await restarted.needsInitialSync(),false);
 });
+
+test('syncProgress tracks monotonic progress for both sliced full sync and incremental sync',async t=>{
+ const {ledger}=await setup(t);const third='33333333-3333-3333-3333-333333333333';
+ const store=baseStore();const seen=[];
+ let releaseFirst;
+ store.client.trajectory=async cid=>{
+  seen.push(cid);
+  if(seen.length===1)await new Promise(r=>{releaseFirst=r;});
+  return raw(1);
+ };
+ const usage=tracker(t,store,ledger,{discoverLocal:disk([id,other,third]),sliceMs:0,maxCandidatesPerSlice:1,continueDelay:10});
+ const fullPending=usage.sync(true);
+ while(!releaseFirst)await delay(1);
+ const midFull=await usage.snapshot({sync:false});
+ assert.equal(midFull.syncing,true);
+ assert.deepEqual(midFull.syncProgress,{done:0,total:3});
+ releaseFirst();
+ await fullPending;
+ const sliceOneDone=await usage.snapshot({sync:false});
+ assert.equal(sliceOneDone.syncing,true);
+ assert.deepEqual(sliceOneDone.syncProgress,{done:1,total:3});
+ while(usage.continuation||usage.pending)await delay(5);
+ const finished=await usage.snapshot({sync:false});
+ assert.equal(finished.syncing,false);assert.equal(finished.syncProgress,null);
+ seen.length=0;releaseFirst=null;
+ const incUsage=tracker(t,store,ledger,{discoverLocal:disk([id,other,third]),maxCandidates:3});
+ const incPending=incUsage.sync(false);
+ const incDone=await incUsage.snapshot({sync:false});
+ await incPending;
+ const incAfter=await incUsage.snapshot({sync:false});
+ assert.equal(incAfter.syncing,false);assert.equal(incAfter.syncProgress,null);
+ assert.equal(seen.length,0,'Incremental refresh skips all settled complete conversations');
+});

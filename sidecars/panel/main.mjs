@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { MetricsStore } from './store.mjs';
-import { DesktopUsage } from './usage.mjs';
+import { DesktopUsage, UsageLedger } from './usage.mjs';
 import { RuntimeUi, makeRendererSource } from '../../compat/runtime-ui.mjs';
 import { platformPaths } from '../../compat/platform.mjs';
 import { PreferencesStore } from '../../compat/preferences.mjs';
@@ -25,7 +25,8 @@ const ownership=isHostSidecar?new SidecarOwner(paths.data):null;
 let settingsCache={},settingsAt=-Infinity;
 const owns=()=>(!ownership||ownership.owns())&&settingsCache.enabled!==false;
 const store = new MetricsStore(undefined,{owns});
-const usage=new DesktopUsage(store,undefined,{host:'app',owns});
+const localTimeZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Shanghai';
+const usage=new DesktopUsage(store,new UsageLedger(undefined,{timeZone:localTimeZone}),{host:'app',owns});
 store.onTrajectory=async(scope,id,raw,options={})=>{
   const {isCurrent=()=>true}=options;
   if(isCurrent()!==true)return;
@@ -38,12 +39,13 @@ const metrics = async input => {
   if(ownership&&!await ownership.isOwner())throw Error('Sidecar ownership changed');
   runtimeSettings();
   const base=await store.snapshot(input);
-  const forceSync=input?.usageSync===true;
+  const forceSync=input?.usageSync===true,refreshSync=!forceSync&&input?.usageRefresh===true;
   if(forceSync)void usage.sync(true);
-  const checkSync=!forceSync&&input?.usageCheck===true&&typeof usage.needsInitialSync==='function'&&await usage.needsInitialSync();
-  let usageData=await usage.snapshot({sync:forceSync||checkSync});
-  if(checkSync&&usageData?.syncing&&usage.pending){
-    await Promise.race([usage.pending.catch(()=>{}),new Promise(resolve=>setTimeout(resolve,250))]);
+  else if(refreshSync)void usage.sync(false);
+  const checkSync=!forceSync&&!refreshSync&&input?.usageCheck===true&&typeof usage.needsInitialSync==='function'&&await usage.needsInitialSync();
+  let usageData=await usage.snapshot({sync:forceSync||refreshSync||checkSync});
+  if((checkSync||refreshSync)&&usageData?.syncing&&usage.pending){
+    await Promise.race([usage.pending.catch(()=>{}),new Promise(resolve=>setTimeout(resolve,180))]);
     usageData=await usage.snapshot({sync:false});
   }
   const update=typeof updater.publicState==='function'?updater.publicState():null;

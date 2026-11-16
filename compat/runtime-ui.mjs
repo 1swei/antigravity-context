@@ -28,6 +28,7 @@ export function validatedInput(value) {
   // be started by the high-frequency inline metrics poll.
   if (value.usageSync === true) result.usageSync = true;
   if (value.usageCheck === true) result.usageCheck = true;
+  if (value.usageRefresh === true) result.usageRefresh = true;
   return result;
 }
 

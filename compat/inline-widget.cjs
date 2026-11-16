@@ -610,7 +610,7 @@ module.exports = function installAgPulseInlineWidget() {
         #open-usage{align-items:center;min-height:34px;gap:12px;width:calc(100% + 12px);margin:5px -6px -3px;padding:7px 6px;border:0;border-radius:6px;background:transparent;color:var(--pulse-label);font-size:11px;text-align:left;line-height:20px}#open-usage:hover{background:var(--pulse-hover);color:var(--pulse-foreground)}#open-usage svg{width:14px;height:14px;color:var(--pulse-muted);flex:none}
         .usage-open-main{display:inline-flex;align-items:center;gap:6px;min-width:0}.usage-update-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;flex:none}.usage-update-dot[hidden]{display:none}
       `;
-      usageDashboard=window.__agPulseUsageFactory({root,language,setMarkup,hostLabel:surface?.usageHostLabel||'Antigravity',guideDismissed:usageGuideDismissed,onDismissGuide:async()=>{const saved=await window.agPulseHost.setPreferences({usageGuideDismissed:true});if(saved?.usageGuideDismissed!==true)throw Error('Usage guide could not be saved');syncGuide(saved);},onLanguage:next=>preferences.choose(next),onRefresh:()=>refreshManually(true),onUpdate:typeof window.agPulseHost?.updatePlugin==='function'?input=>window.agPulseHost.updatePlugin(input):null});
+      usageDashboard=window.__agPulseUsageFactory({root,language,setMarkup,hostLabel:surface?.usageHostLabel||'Antigravity',guideDismissed:usageGuideDismissed,onDismissGuide:async()=>{const saved=await window.agPulseHost.setPreferences({usageGuideDismissed:true});if(saved?.usageGuideDismissed!==true)throw Error('Usage guide could not be saved');syncGuide(saved);},onLanguage:next=>preferences.choose(next),onRefresh:()=>refreshManually('refresh'),onUpdate:typeof window.agPulseHost?.updatePlugin==='function'?input=>window.agPulseHost.updatePlugin(input):null});
       $('open-usage').addEventListener('click',()=>{const trigger=root.querySelector('[data-card=cache]'),conversation=conversationId();hide();usageDashboard.open(data?.usage,trigger,data?.update);void window.agPulseHost.getMetrics({conversationId:conversation,force:true,usageCheck:true}).then(result=>{if(!disposed&&result?.usage)usageDashboard.update(result.usage,result.update);}).catch(()=>{});});
     }
     localize();
@@ -781,7 +781,7 @@ module.exports = function installAgPulseInlineWidget() {
     const current=()=>!disposed&&epoch===requestEpoch&&conversation===conversationId()&&conversation===lastConversation&&node?.isConnected;
     pending=true;lastFetch=Date.now();
     refreshRequest=(async()=>{
-      try{const result=await window.agPulseHost.getMetrics({conversationId:conversation,force,...(syncUsage?{usageSync:true}:{})});if(!current())return;node.style.visibility=result.enabled===false?'hidden':'';if(result.enabled===false){hide();return;}if(!conversation||result.speed&&result.speed.conversationId!==conversation)result.speed=null;data=result;if(result.preferences){syncGuide(result.preferences);preferences.sync(result.preferences);}if(Object.hasOwn(result,'theme'))themeController?.setHostTheme(result.theme);render();}
+      try{const syncParam=syncUsage===true?{usageSync:true}:syncUsage==='refresh'?{usageRefresh:true}:{};const result=await window.agPulseHost.getMetrics({conversationId:conversation,force,...syncParam});if(!current())return;node.style.visibility=result.enabled===false?'hidden':'';if(result.enabled===false){hide();return;}if(!conversation||result.speed&&result.speed.conversationId!==conversation)result.speed=null;data=result;if(result.preferences){syncGuide(result.preferences);preferences.sync(result.preferences);}if(Object.hasOwn(result,'theme'))themeController?.setHostTheme(result.theme);render();}
       catch{if(current()&&data){data.connection='stale';data.error=t('reconnecting');render();}}
       finally{if(epoch===requestEpoch){pending=false;refreshRequest=null;}}
     })();
@@ -793,7 +793,7 @@ module.exports = function installAgPulseInlineWidget() {
   document.addEventListener('keydown',onKey);document.addEventListener('pointerdown',onPointer);document.addEventListener('focusin',onFocus);
   window.addEventListener('resize',scheduleLayout);document.addEventListener('scroll',scheduleLayout,true);
   densityMedia.addEventListener('change',stopDensityMotion);
-  const timerId=setInterval(()=>{mount();fit();position();if(conversationId()!==lastConversation||Date.now()-lastFetch>(document.hidden?10000:2200))refresh();},1000);
+  const timerId=setInterval(()=>{mount();fit();position();const pollMs=document.hidden?10000:usageDashboard?.isOpen&&data?.usage?.syncing?900:2200;if(conversationId()!==lastConversation||Date.now()-lastFetch>pollMs)refresh();},1000);
   window.__agPulseDispose=()=>{
     disposed=true;requestEpoch++;pending=false;refreshRequest=null;stopDensityMotion();densityFrame=null;densityProbe=null;
     clearInterval(timerId);clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();usageDashboard?.dispose();node?.remove();

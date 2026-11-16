@@ -1239,20 +1239,30 @@ test('usage-ui header update button shows red dot on available update and suppor
     const usageData = { today: '2026-11-16', firstDate: '2026-11-16', timeZone: 'Asia/Shanghai', requests: 1, models: [], days: [] };
     dash.open(usageData, null, { state: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' });
     assert.equal(idMap.get('update-dot').hidden, true);
-    assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 本机存储');
+    assert.equal(idMap.get('timezone').textContent, '本机存储');
+    assert.equal(idMap.get('sync-prog-wrap').hidden, true);
     assert.equal(idMap.get('alert').hidden, true);
 
     const firstHeatTile = idMap.get('heat').children[0];
     dash.update({ ...usageData, partialRequests: 361, syncing: false, retryingConversations: 1 });
-    assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 本机存储');
+    assert.equal(idMap.get('timezone').textContent, '本机存储');
+    assert.equal(idMap.get('sync-prog-wrap').hidden, true);
     assert.equal(idMap.get('alert').hidden, true, 'partialRequests alone must not trigger permanent unreadable alert');
     assert.equal(idMap.get('heat').children[0], firstHeatTile, 'non-chart updates must not rebuild heatmap DOM');
 
-    dash.update({ ...usageData, syncing: true });
-    assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 同步历史中…');
+    dash.update({ ...usageData, syncing: true, syncProgress: null });
+    assert.equal(idMap.get('timezone').textContent, '同步历史中…');
+    assert.equal(idMap.get('sync-prog-wrap').hidden, false);
+    assert.equal(idMap.get('sync-prog-wrap').dataset.indeterminate, 'true');
     assert.equal(idMap.get('heat').children[0], firstHeatTile);
 
-    dash.update({ ...usageData, syncing: false, unreadableFiles: 1 });
+    dash.update({ ...usageData, syncing: true, syncProgress: { done: 5, total: 10 } });
+    assert.equal(idMap.get('sync-prog-wrap').hidden, false);
+    assert.equal(idMap.get('sync-prog-wrap').dataset.indeterminate, 'false');
+    assert.equal(idMap.get('sync-prog-fill').style.getPropertyValue('transform'), 'scaleX(0.5)');
+
+    dash.update({ ...usageData, syncing: false, syncProgress: null, unreadableFiles: 1 });
+    assert.equal(idMap.get('sync-prog-wrap').hidden, true);
     assert.equal(idMap.get('alert').hidden, false);
     assert.equal(idMap.get('alert').textContent, '部分记录暂不可读取，用量可能不完整');
 

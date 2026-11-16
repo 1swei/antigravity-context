@@ -324,7 +324,7 @@ export class DesktopUsage{
     this.liveRecoveryPollMs=liveRecoveryPollMs;this.liveBackgroundPollMs=liveBackgroundPollMs;this.liveBackgroundRetryMs=liveBackgroundRetryMs;
     this.liveStates=new Map();this.liveOrphans=new Set();this.liveRecoveries=new Map();this.liveRows=0;this.liveBytes=0;this.liveGroups=0;this.liveScope=null;this.liveEpoch=null;this.liveUnknownOverflow=false;this.liveMarkedError=false;
   }
-  syncing=false;lastSync=0;status='waiting';missingConversations=0;confirmedMissingConversations=0;retryingConversations=0;scope=null;scopeEpoch=null;forceQueued=false;disposed=false;continuation=null;
+  syncing=false;lastSync=0;status='waiting';missingConversations=0;confirmedMissingConversations=0;retryingConversations=0;scope=null;scopeEpoch=null;forceQueued=false;disposed=false;continuation=null;syncTotal=0;syncDone=0;
   rememberDelegates(scope,id,raw){
     if(scope!==this.store.identity)return [];
     if(this.delegatedScope!==scope||this.delegatedEpoch!==this.store.epoch){this.delegatedCandidates.clear();this.delegatedScope=scope;this.delegatedEpoch=this.store.epoch;}
@@ -537,7 +537,7 @@ export class DesktopUsage{
     if(this.disposed||!this.owns())return Promise.resolve();
     if(forceFull)this.forceQueued=true;
     if(this.pending)return this.pending;
-    if(!this.continuation){this.passSeen.clear();this.passFailures.clear();}
+    if(!this.continuation){this.passSeen.clear();this.passFailures.clear();this.syncTotal=0;this.syncDone=0;}
     clearTimeout(this.continuation);this.continuation=null;
     this.syncing=true;this.status='syncing';
     this.pending=(async()=>{
@@ -551,7 +551,8 @@ export class DesktopUsage{
       this.confirmedMissingConversations=result.confirmed;this.retryingConversations=result.retrying;
       this.status=result.more?'syncing':result.missing||result.partial?'partial':'ready';
       if(result.more){this.continuation=setTimeout(()=>void this.sync(),this.continueDelay);this.continuation.unref?.();}
-    })().catch(()=>{this.status='offline';this.lastSync=this.now();}).finally(()=>{this.syncing=false;this.pending=null;});return this.pending;
+      else {this.syncTotal=0;this.syncDone=0;}
+    })().catch(()=>{this.status='offline';this.lastSync=this.now();this.syncTotal=0;this.syncDone=0;}).finally(()=>{this.syncing=false;this.pending=null;if(!this.continuation){this.syncTotal=0;this.syncDone=0;}});return this.pending;
   }
   async runSync(forceFull){
     const scope=this.store.identity,epoch=this.store.epoch;
@@ -561,7 +562,7 @@ export class DesktopUsage{
       return active;
     };
     if(!scope)return null;
-    if(this.scope!==scope||this.scopeEpoch!==epoch){this.scope=scope;this.scopeEpoch=epoch;this.fingerprints.clear();this.fullRemaining.clear();this.fullJournal=null;this.fullMissing=0;this.passSeen.clear();this.passFailures.clear();this.readFailures.clear();this.localScanResult=null;this.localScanAt=-Infinity;}
+    if(this.scope!==scope||this.scopeEpoch!==epoch){this.scope=scope;this.scopeEpoch=epoch;this.fingerprints.clear();this.fullRemaining.clear();this.fullJournal=null;this.fullMissing=0;this.passSeen.clear();this.passFailures.clear();this.readFailures.clear();this.localScanResult=null;this.localScanAt=-Infinity;this.syncTotal=0;this.syncDone=0;}
     let missing=0,candidates,completePass=false;
     if(!forceFull&&this.fullRemaining.size){
       // A full import owns a fixed, bounded queue. Rediscovery between slices
@@ -587,7 +588,7 @@ export class DesktopUsage{
       if(this.delegatedScope===scope&&this.delegatedEpoch===epoch)for(const [id,c]of this.delegatedCandidates)if(!candidates.has(id)){
         if(candidates.size>=this.maxMapEntries){missing++;break;}candidates.set(id,c);
       }
-      if(forceFull||this.sliceMs===0){this.fullRemaining=new Map(candidates);this.fullMissing=missing;this.passSeen.clear();this.passFailures.clear();completePass=true;}
+      if(forceFull||this.sliceMs===0){this.fullRemaining=new Map(candidates);this.fullMissing=missing;this.passSeen.clear();this.passFailures.clear();completePass=true;this.syncTotal=this.fullRemaining.size;this.syncDone=0;}
     }
     const reused=!forceFull&&completePass&&this.fullJournal;
     let journal=reused?this.fullJournal:this.host?await this.ledger.backfillState(scope,this.host,{preferred:[...candidates.keys()].map(hash)}):{};
@@ -600,7 +601,10 @@ export class DesktopUsage{
       return time(b)-time(a);
     });
     const selected=completePass?ordered:ordered.slice(0,this.maxCandidates);
-    const started=this.now();let processed=0,more=false,dirty=false,partial=!completePass&&ordered.length>selected.length;
+    if(!completePass){this.syncTotal=selected.length;this.syncDone=0;}
+    else if(this.syncTotal===0&&this.fullRemaining.size){this.syncTotal=this.fullRemaining.size;this.syncDone=0;}
+    const started=this.now();let processed=0,checked=0,more=false,dirty=false,partial=!completePass&&ordered.length>selected.length;
+    const bumpProgress=()=>{if(!completePass)this.syncDone=checked;else{this.syncTotal=Math.max(this.syncTotal,this.syncDone+this.fullRemaining.size);this.syncDone=Math.max(this.syncDone,this.syncTotal-this.fullRemaining.size);}};
     for(const c of selected){
       if(!current())return {current};
       // Always consume one queued entry, even if the event loop was suspended
@@ -612,14 +616,15 @@ export class DesktopUsage{
       const signature=hash('delegation-v1:'+c.id+':'+(c.signature||'')+mark),old=journal[key];
       const unchanged=old?.signature===signature;
       const forced=this.fullRemaining.has(c.id);
-      if(!forced&&this.passSeen.has(c.id))continue;
-      if(!forced&&unchanged&&old?.state==='retry'&&old.retryAt>this.now()){this.passFailures.add(c.id);continue;}
+      if(!forced&&this.passSeen.has(c.id)){checked++;bumpProgress();continue;}
+      if(!forced&&unchanged&&old?.state==='retry'&&old.retryAt>this.now()){this.passFailures.add(c.id);checked++;bumpProgress();continue;}
       const cached=s&&this.fingerprints.get(c.id)===mark&&!/RUNNING/.test(s.status||'');
       // A persisted checkpoint already verified both disk and host revision.
       // Restarting the collector alone must not force all settled chats to load.
       const settled=s?.modifiedAt&&/IDLE|DONE|COMPLETED|CANCELLED|CANCELED|STOPPED|FAILED|ERROR/.test(String(s.status||''));
-      if(!forced&&!old?.hasDelegates&&(c.signature?unchanged&&old.state==='complete'&&(!s||cached||settled):cached))continue;
+      if(!forced&&!old?.hasDelegates&&(c.signature?unchanged&&old.state==='complete'&&(!s||cached||settled):cached)){checked++;bumpProgress();continue;}
       if(processed&&this.now()-started>=this.sliceMs){more=completePass;break;}
+      checked++;
       processed++;
       this.passSeen.add(c.id);this.capMap(this.passSeen);
       this.fullRemaining.delete(c.id);
@@ -666,6 +671,7 @@ export class DesktopUsage{
         if(this.host){
           journal[key]={signature,state:'retry',failures,retryAt:this.now()+Math.min(30*60000,30000*2**Math.min(failures-1,6))};dirty=true;}
       }
+      bumpProgress();
       await yieldToLiveRequests();
     }
     // Usage records remain atomic per conversation. A crash only revalidates
@@ -692,7 +698,8 @@ export class DesktopUsage{
     const scope=this.store.identity,epoch=this.store.epoch,current=()=>!this.disposed&&this.owns()&&scope===this.store.identity&&epoch===this.store.epoch;
     const value=await this.ledger.summary(scope,Date.now(),{isCurrent:current});if(!current())return null;
     const syncing=this.syncing||!!this.continuation||!!this.ledger.diskSummaryPending||!!this.ledger.diskWrites||value?.summaryStale===true;
-    return {...value,syncing,status:syncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true};
+    const syncProgress=syncing&&this.syncTotal>0?{done:Math.min(this.syncDone,this.syncTotal),total:this.syncTotal}:null;
+    return {...value,syncing,syncProgress,status:syncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true};
   }
   dispose(){this.disposed=true;this.forceQueued=false;clearTimeout(this.continuation);this.continuation=null;clearTimeout(this.liveRecoveryTimer);this.liveRecoveryTimer=null;this.refreshLiveScope();this.fullRemaining.clear();this.fullJournal=null;}
 }
