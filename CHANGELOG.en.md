@@ -3,8 +3,16 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.1` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.2` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-16`
+
+---
+
+## v1.0.2 (`2026-11-16`)
+
+- **Faster Auto-Update Detection**: Shortened the background silent check interval from 6 hours to 30 minutes and triggered a silent update check whenever the usage modal opens so the red-dot indicator appears promptly.
+- **Cleaner Update Modal Notes & Footer**: Stripped raw Markdown syntax and `**Full Changelog**` links from release notes in the update modal, and removed the "Settings & history preserved" footer text.
+- **GitHub Release Notes Automation**: Updated the release workflow to extract matching version entries directly from `CHANGELOG.md`.
 
 ---
 

@@ -14,6 +14,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Extract release notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          python3 - <<'PY' "$TAG" > release_notes.md
+          import pathlib, re, subprocess, sys
+          tag = sys.argv[1]
+          text = pathlib.Path('CHANGELOG.md').read_text(encoding='utf-8')
+          m = re.search(rf'^##\s+{re.escape(tag)}[^\n]*\n([\s\S]*?)(?=^##\s+|\Z)', text, re.M)
+          body = m.group(1).strip() if m else ''
+          if not body:
+              body = subprocess.check_output(['git', 'log', '-1', '--pretty=%s'], text=True).strip()
+          body = re.sub(r'^---\s*$', '', body, flags=re.M).strip()
+          print(body)
+          PY
 
       - name: Package release zip and SHA-256
         run: |
@@ -28,7 +45,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: release_notes.md
           files: |
             antigravity-context-*.zip
             antigravity-context-*.zip.sha256

@@ -1239,13 +1239,20 @@ test('usage-ui header update button shows red dot on available update and suppor
     dash.open(usageData, null, { state: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' });
     assert.equal(idMap.get('update-dot').hidden, true);
 
-    dash.update(usageData, { state: 'available', currentVersion: '1.0.0', latestVersion: '1.0.1', notes: 'Fix bug' });
+    dash.update(usageData, {
+      state: 'available',
+      currentVersion: '1.0.0',
+      latestVersion: '1.0.1',
+      notes: '## v1.0.2\n- **更新**：精简界面\n**Full Changelog**: https://github.com/1swei/antigravity-context/compare/v1.0.0...v1.0.2',
+    });
     assert.equal(idMap.get('update-dot').hidden, false);
 
     idMap.get('update-btn').dispatch('click');
     assert.equal(idMap.get('update-menu').open, true);
     assert.equal(idMap.get('upd-cur').textContent, 'v1.0.0');
     assert.equal(idMap.get('upd-lat').textContent, 'v1.0.1');
+    assert.equal(idMap.get('upd-notes').textContent, '• 更新：精简界面');
+    assert.equal(idMap.get('upd-feedback').textContent, '');
     assert.equal(idMap.get('upd-action').textContent, '立即更新');
 
     idMap.get('upd-action').dispatch('click');

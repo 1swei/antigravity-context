@@ -9,7 +9,7 @@
 轻量、本地优先的 Antigravity 插件：在对话输入框内直接展示实时上下文占用、分段构成、生成速度、缓存命中率，并提供交互式 Token 用量统计弹窗。
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-1.0.1-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-1.0.2-brightgreen.svg)
 
 </div>
 

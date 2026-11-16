@@ -37,7 +37,11 @@ const updater=new AppUpdater({pluginDir:join(HERE,'..','..'),dataDir:paths.data}
 const metrics = async input => {
   if(ownership&&!await ownership.isOwner())throw Error('Sidecar ownership changed');
   runtimeSettings();
-  const base=await store.snapshot(input);if(input?.usageSync===true)void usage.sync(true);
+  const base=await store.snapshot(input);
+  if(input?.usageSync===true){
+    void usage.sync(true);
+    if(typeof updater.check==='function'&&Date.now()-(updater.lastCheck||0)>60000)void updater.check({silent:true}).catch(()=>{});
+  }
   const update=typeof updater.publicState==='function'?updater.publicState():null;
   return {...base,usage:await usage.snapshot({sync:input?.usageSync===true}),preferences:await preferences.snapshot(),theme:await readHostTheme(),integration:integration.health,...(update?{update}:{})};
 };
@@ -76,7 +80,7 @@ if (isHostSidecar) {
   const runAutoUpdateCheck=()=>{if(typeof updater.check==='function')void updater.check({silent:true}).catch(()=>{});};
   if(typeof updater.current==='function')void updater.current().then(v=>{if(updater.state&&!updater.state.currentVersion)updater.state={...updater.state,currentVersion:v};}).catch(()=>{});
   startupUpdateTimer=setTimeout(runAutoUpdateCheck,5000);startupUpdateTimer.unref?.();
-  periodicUpdateTimer=setInterval(runAutoUpdateCheck,6*60*60*1000);periodicUpdateTimer.unref?.();
+  periodicUpdateTimer=setInterval(runAutoUpdateCheck,30*60*1000);periodicUpdateTimer.unref?.();
   const shutdown=async()=>{
     clearTimeout(startupUpdateTimer);clearInterval(periodicUpdateTimer);
     usage.dispose();store.dispose();

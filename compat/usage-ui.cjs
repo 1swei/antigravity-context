@@ -542,7 +542,10 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
       text('upd-prog-val',known?`${Math.min(100,Math.round(prog.received/prog.total*100))}% · ${formatBytes(prog.received)}/${formatBytes(prog.total)}`:'');
       $('upd-prog-fill').style.setProperty('transform',known?`scaleX(${Math.max(0.02,Math.min(1,prog.received/prog.total))})`:'');
     }
-    const notesText=(s.notes||'').split(/\r?\n/).map(l=>l.trim()).filter(l=>l&&!l.startsWith('#')).slice(0,3).join('\n');
+    const notesText=(s.notes||'').split(/\r?\n/).map(l=>l.trim())
+      .filter(l=>l&&!l.startsWith('#')&&!/^\*{0,2}Full Changelog\*{0,2}\s*:/i.test(l))
+      .map(l=>l.replace(/^[-*]\s+/,'• ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/`([^`]+)`/g,'$1'))
+      .slice(0,4).join('\n');
     $('upd-notes').hidden=st!=='available'||!notesText;text('upd-notes',notesText);
     const errMap={
       network:w('网络请求失败，请检查代理或网络','Connection failed. Check network/proxy.','網路連線失敗，請檢查代理或網路'),
@@ -564,7 +567,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
       'install-location':w('插件路径校验失败（不支持符号链接）','Plugin path validation failed.','外掛路徑驗證失敗'),
       'plan-expired':w('更新信息已过期，请重新检查','Update plan expired; check again.','更新資訊已過期，請重新檢查'),
     };
-    const fb=st==='error'?(errMap[s.errorDetail]||errMap[s.error]||errMap.network):st==='available'?w('保留当前设置与统计数据','Settings & history preserved','保留現有設定與統計資料'):st==='installed'?w('点击重载后即可生效','Reload to activate new version','點擊重新載入即可生效'):w('自动后台检查已开启','Auto-check enabled','已開啟自動檢查');
+    const fb=st==='error'?(errMap[s.errorDetail]||errMap[s.error]||errMap.network):st==='available'?'':st==='installed'?w('点击重载后即可生效','Reload to activate new version','點擊重新載入即可生效'):w('自动后台检查已开启','Auto-check enabled','已開啟自動檢查');
     text('upd-feedback',fb);
     const act=$('upd-action');
     act.hidden=inProg;act.disabled=updateBusy||inProg||typeof onUpdate!=='function';

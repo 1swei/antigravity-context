@@ -3,8 +3,16 @@
 **简体中文** · [English](CHANGELOG.en.md)
 
 - **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
-- **当前版本**：`1.0.1`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
+- **当前版本**：`1.0.2`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
 - **更新时间**：`2026-11-16`
+
+---
+
+## v1.0.2（`2026-11-16`）
+
+- **优化自动检查更新频率**：后台静默检查周期由 6 小时缩短至 30 分钟，并在打开用量统计弹窗时自动触发静默检查，及时点亮红点提醒。
+- **修复更新弹窗文本与日志渲染**：清理更新日志中的 Markdown 标记与 `Full Changelog` 对比链接；移除更新弹窗底部的「保留当前设置与统计数据」提示文案。
+- **完善 GitHub Release 自动说明**：发版工作流自动提取 `CHANGELOG.md` 对应版本条目作为 Release 发布说明。
 
 ---
 
