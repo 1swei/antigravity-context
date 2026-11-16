@@ -602,7 +602,7 @@ module.exports = function installAgPulseInlineWidget() {
         .usage-open-main{display:inline-flex;align-items:center;gap:6px;min-width:0}.usage-update-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;flex:none}.usage-update-dot[hidden]{display:none}
       `;
       usageDashboard=window.__agPulseUsageFactory({root,language,setMarkup,hostLabel:surface?.usageHostLabel||'Antigravity',guideDismissed:usageGuideDismissed,onDismissGuide:async()=>{const saved=await window.agPulseHost.setPreferences({usageGuideDismissed:true});if(saved?.usageGuideDismissed!==true)throw Error('Usage guide could not be saved');syncGuide(saved);},onLanguage:next=>preferences.choose(next),onRefresh:()=>refreshManually(true),onUpdate:typeof window.agPulseHost?.updatePlugin==='function'?input=>window.agPulseHost.updatePlugin(input):null});
-      $('open-usage').addEventListener('click',()=>{const trigger=root.querySelector('[data-card=cache]'),conversation=conversationId();hide();usageDashboard.open(data?.usage,trigger,data?.update);void window.agPulseHost.getMetrics({conversationId:conversation,force:true,usageSync:true}).then(result=>{if(!disposed&&result?.usage)usageDashboard.update(result.usage,result.update);}).catch(()=>{});});
+      $('open-usage').addEventListener('click',()=>{const trigger=root.querySelector('[data-card=cache]'),conversation=conversationId();hide();usageDashboard.open(data?.usage,trigger,data?.update);void window.agPulseHost.getMetrics({conversationId:conversation,force:true,usageCheck:true}).then(result=>{if(!disposed&&result?.usage)usageDashboard.update(result.usage,result.update);}).catch(()=>{});});
     }
     localize();
     render();refresh();

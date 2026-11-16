@@ -982,6 +982,7 @@ test('usage-ui removes weekly/composition views and coordinates unified date fil
       'previous',
       'next',
       'today-jump',
+      'heat-sub',
     ]) {
       assert.equal(idMap.get(removedId), undefined, `${removedId} should not exist`);
     }
@@ -1238,6 +1239,13 @@ test('usage-ui header update button shows red dot on available update and suppor
     const usageData = { today: '2026-11-16', firstDate: '2026-11-16', timeZone: 'Asia/Shanghai', requests: 1, models: [], days: [] };
     dash.open(usageData, null, { state: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' });
     assert.equal(idMap.get('update-dot').hidden, true);
+    assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 本机存储');
+
+    dash.update({ ...usageData, syncing: false, retryingConversations: 1 });
+    assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 本机存储');
+
+    dash.update({ ...usageData, syncing: true });
+    assert.equal(idMap.get('timezone').textContent, 'Asia/Shanghai · 同步历史中…');
 
     dash.update(usageData, {
       state: 'available',

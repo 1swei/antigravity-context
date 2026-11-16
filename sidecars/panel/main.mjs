@@ -38,9 +38,15 @@ const metrics = async input => {
   if(ownership&&!await ownership.isOwner())throw Error('Sidecar ownership changed');
   runtimeSettings();
   const base=await store.snapshot(input);
-  if(input?.usageSync===true)void usage.sync(true);
+  const forceSync=input?.usageSync===true,checkSync=!forceSync&&input?.usageCheck===true;
+  if(forceSync)void usage.sync(true);
+  let usageData=await usage.snapshot({sync:forceSync||checkSync});
+  if(checkSync&&usageData?.syncing&&usage.pending){
+    await Promise.race([usage.pending.catch(()=>{}),new Promise(resolve=>setTimeout(resolve,250))]);
+    usageData=await usage.snapshot({sync:false});
+  }
   const update=typeof updater.publicState==='function'?updater.publicState():null;
-  return {...base,usage:await usage.snapshot({sync:input?.usageSync===true}),preferences:await preferences.snapshot(),theme:await readHostTheme(),integration:integration.health,...(update?{update}:{})};
+  return {...base,usage:usageData,preferences:await preferences.snapshot(),theme:await readHostTheme(),integration:integration.health,...(update?{update}:{})};
 };
 const usageSource=()=>{const s=readFileSync(join(HERE,'..','..','compat','usage-ui.cjs'),'utf8');return `window.__agPulseUsageFactory=(${s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'')});`;};
 const inlineSource=()=>{

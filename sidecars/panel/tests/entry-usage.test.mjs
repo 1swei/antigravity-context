@@ -103,3 +103,64 @@ for(const host of ['app','preview'])test(`${host} real entrypoint keeps unknown 
     assert.deepEqual(value.statuses,[200,200,200]);
   }
 });
+
+test('app real entrypoint uses incremental check on usageCheck without full sync(true)', () => {
+  const url = new URL('../main.mjs', import.meta.url).href;
+  const checkFixture = async () => {
+    const { SourceTextModule, SyntheticModule, createContext } = await import('node:vm');
+    const { readFile } = await import('node:fs/promises');
+    const state = { syncs: [], snapshots: [] };
+    let snapshot;
+    class Owner { token='fixture'; startedAt=1; async claim(){return true;} owns(){return true;} async isOwner(){return true;} watch(){} stop(){} }
+    class Store { constructor(c,o){} async snapshot(){return {connection:'live'};} dispose(){} }
+    class Usage {
+      pending = null;
+      async snapshot(opts){
+        state.snapshots.push(opts??null);
+        if (opts?.sync) {
+          this.pending = Promise.resolve();
+          return { syncing: true };
+        }
+        return { syncing: false };
+      }
+      async sync(force){ state.syncs.push(force); }
+      ingestLive(){} dispose(){}
+    }
+    class Ui { health={}; constructor(o){snapshot=o.snapshot;} start(){} async stop(){} }
+    const source = await readFile(new URL(url), 'utf8');
+    const native = Object.fromEntries(await Promise.all(['node:path','node:url','node:os'].map(async n=>[n,await import(n)])));
+    const context = createContext({
+      process: { env: { ANTIGRAVITY_EXECUTABLE_DATA_DIR: 'fixture' }, exit(){}, on(){}, once(){} },
+      console, URL, URLSearchParams, setInterval:()=>({unref(){}}), clearInterval(){}, setTimeout:(fn,ms)=>setTimeout(fn,ms), clearTimeout
+    });
+    const modules = {
+      'node:fs': { readFileSync: f => String(f).endsWith('.cjs') ? 'module.exports = function() {};' : '{}' },
+      'node:fs/promises': { readFile: async () => 'module.exports = function() {};', mkdir: async () => {}, writeFile: async () => {} },
+      'node:http': { createServer(){ throw Error('Unexpected'); } },
+      'store.mjs': { MetricsStore: Store },
+      'usage.mjs': { DesktopUsage: Usage, UsageLedger: class {} },
+      'runtime-ui.mjs': { RuntimeUi: Ui, makeRendererSource: () => '' },
+      'platform.mjs': { platformPaths: () => ({ data: 'fixture', settings: 'settings.json' }) },
+      'preferences.mjs': { PreferencesStore: class { async snapshot(){ return {}; } } },
+      'sidecar-owner.mjs': { SidecarOwner: Owner },
+      'host-theme.mjs': { readHostTheme: async () => ({}) },
+      'updater.mjs': { AppUpdater: class {}, releaseRuntimeDirectory(){} },
+    };
+    const entry = new SourceTextModule(source, { context, identifier: url, initializeImportMeta(meta){ meta.url = url; } });
+    await entry.link(async specifier => {
+      const key = specifier.startsWith('node:') ? specifier : specifier.split('/').at(-1);
+      const values = native[key] || modules[key];
+      return new SyntheticModule(Object.keys(values), function(){ for (const [k,v] of Object.entries(values)) this.setExport(k,v); }, { context });
+    });
+    await entry.evaluate();
+    const res = await snapshot({ conversationId: 'fixture', force: true, usageCheck: true });
+    return { syncs: state.syncs, snapshots: state.snapshots, syncing: res.usage.syncing };
+  };
+  const script = `const url=${JSON.stringify(url)};(${checkFixture.toString()})().then(v=>console.log(JSON.stringify(v)))`;
+  const result = spawnSync(process.execPath, ['--experimental-vm-modules', '--input-type=module', '-e', script], { encoding: 'utf8', timeout: 15000, windowsHide: true });
+  assert.equal(result.status, 0, result.stderr);
+  const out = JSON.parse(result.stdout.trim());
+  assert.deepEqual(out.syncs, []);
+  assert.deepEqual(out.snapshots, [{ sync: true }, { sync: false }]);
+  assert.equal(out.syncing, false);
+});

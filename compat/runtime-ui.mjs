@@ -27,6 +27,7 @@ export function validatedInput(value) {
   // Historical usage import is an explicit, user-visible action. It must not
   // be started by the high-frequency inline metrics poll.
   if (value.usageSync === true) result.usageSync = true;
+  if (value.usageCheck === true) result.usageCheck = true;
   return result;
 }
 
