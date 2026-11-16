@@ -622,7 +622,7 @@ module.exports = function installAgPulseInlineWidget() {
     if(usageDashboard){
       const available=Boolean(data.usage);hidden($('usage-entry'),!available);
       text('usage-today',compact(data.usage?.todayTokens,'0'));text('usage-month',compact(data.usage?.monthTokens,'0'));usageDashboard.update(data.usage,data?.update);
-      if($('usage-update-dot'))$('usage-update-dot').hidden=!['available','installed'].includes(data?.update?.state);
+      if($('usage-update-dot'))$('usage-update-dot').hidden=data?.update?.state!=='available';
     }
     const speed=data.speed,collection=data.collection;
     const taskUsage=Number.isSafeInteger(speed?.taskUsage?.subagents)&&speed.taskUsage.subagents>0?speed.taskUsage:null;

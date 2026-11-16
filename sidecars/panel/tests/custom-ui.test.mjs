@@ -1233,8 +1233,8 @@ test('usage-ui header update button shows red dot on available update and suppor
       onRefresh: async () => {},
       onUpdate: async input => {
         calls.push(input);
-        if (input.action === 'apply') return { state: 'installed', currentVersion: '1.0.2', latestVersion: '1.0.2' };
-        if (input.action === 'reload') return { state: 'reloading', currentVersion: '1.0.2', latestVersion: '1.0.2' };
+        if (input.action === 'apply') return { state: 'reloading', currentVersion: '1.0.2', latestVersion: '1.0.2', progress: { phase: 'complete' } };
+        if (input.action === 'status') return { state: 'reloading', currentVersion: '1.0.2', latestVersion: '1.0.2', progress: { phase: 'complete' } };
         return { state: 'available', currentVersion: '1.0.0', latestVersion: '1.0.2', notes: '## v1.0.2\n- **更新**：新增主题提醒\n**Full Changelog**: https://example.com' };
       },
     });
@@ -1390,12 +1390,10 @@ test('usage-ui header update button shows red dot on available update and suppor
     idMap.get('upd-action').dispatch('click');
     await new Promise(r => setImmediate(r));
     assert.deepEqual(calls[1], { action: 'apply', version: '1.0.2' });
-    assert.equal(idMap.get('upd-action').textContent, '重新加载插件');
-    assert.equal(idMap.get('update-dot').hidden, false);
-
-    idMap.get('upd-action').dispatch('click');
-    await new Promise(r => setImmediate(r));
-    assert.deepEqual(calls[2], { action: 'reload' });
+    assert.equal(idMap.get('upd-status').textContent, '更新已安装，正在自动重载…');
+    assert.equal(idMap.get('upd-feedback').textContent, '新版本将在几秒内自动生效');
+    assert.equal(idMap.get('upd-action').hidden, true);
+    assert.equal(idMap.get('update-dot').hidden, true);
     dash.dispose();
   } finally {
     globalThis.document = prevDoc;

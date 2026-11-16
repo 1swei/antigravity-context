@@ -89,7 +89,7 @@ export class AppUpdater{
  constructor({pluginDir,dataDir,worker=join(pluginDir,'compat','update-worker.py'),run=runUpdateWorker,onReload=null,now=Date.now}={}){
   this.pluginDir=resolve(pluginDir);this.dataDir=join(resolve(dataDir),'updates');this.worker=resolve(worker);this.run=run;this.onReload=onReload;this.now=now;
  }
- state={state:'idle',host:'app',currentVersion:null};plan=null;checkPending=null;applyPending=null;job=null;lastCheck=0;
+ state={state:'idle',host:'app',currentVersion:null};plan=null;checkPending=null;applyPending=null;job=null;reloadTimer=null;lastCheck=0;
  publicState(){const {state,host,currentVersion,latestVersion,notes,error,errorDetail,progress}=this.state;return {state,host,currentVersion,latestVersion,notes,error,errorDetail,progress};}
  async current(){const m=JSON.parse(await readFile(join(this.pluginDir,'plugin.json'),'utf8'));if(m.name!=='antigravity-context'||!/^\d+\.\d+\.\d+$/.test(m.version))throw Error('verification');return m.version;}
  async check({silent=false,force=false}={}){
@@ -145,10 +145,16 @@ export class AppUpdater{
      this.state={...this.state,progress};
     }});
     if(result.verified!==true||result.version!==version||await this.current()!==version)throw Error('verification');
-    this.state={...this.state,state:'installed',currentVersion:version,progress:{phase:'complete'}};
+    this.state={...this.state,state:'reloading',currentVersion:version,progress:{phase:'complete'}};
+    this.scheduleReload();
    }catch(error){this.state={...this.state,state:'error',error:safeCode(error.message),errorDetail:errorDetail(error)};}
    finally{if(file)await unlink(file).catch(()=>{});}
   })().finally(()=>{this.job=null;});return this.publicState();
+ }
+ scheduleReload(delay=800){
+  if(this.reloadTimer||typeof this.onReload!=='function')return;
+  this.reloadTimer=setTimeout(()=>{this.reloadTimer=null;this.onReload?.();},delay);
+  this.reloadTimer.unref?.();
  }
  async request(input){
   if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['action','version'].includes(k)))throw Error('verification');
@@ -156,7 +162,7 @@ export class AppUpdater{
   if(input.action==='status'&&input.version===undefined)return this.publicState();
   if(input.action==='apply'&&typeof input.version==='string')return this.apply(input.version);
   if(input.action==='reload'&&input.version===undefined&&this.state.state==='reloading')return this.publicState();
-  if(input.action==='reload'&&input.version===undefined&&this.state.state==='installed'&&this.onReload){this.state={...this.state,state:'reloading'};setTimeout(()=>this.onReload(),500);return this.publicState();}
+  if(input.action==='reload'&&input.version===undefined&&this.state.state==='installed'&&this.onReload){this.state={...this.state,state:'reloading'};this.scheduleReload(500);return this.publicState();}
   throw Error('verification');
  }
 }

@@ -558,7 +558,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   function renderUpdate(){
     const btn=$('update-btn'),dot=$('update-dot'),ver=$('version-tag');
     if(!btn)return;
-    const s=updateState||{state:'idle'},st=s.state||'idle',hasNew=st==='available'||st==='installed';
+    const s=updateState||{state:'idle'},st=s.state||'idle',hasNew=st==='available';
     if(ver){ver.hidden=!s.currentVersion;if(s.currentVersion)text('version-tag','v'+s.currentVersion);}
     if(dot)dot.hidden=!hasNew;
     btn.hidden=typeof onUpdate!=='function'&&!s.currentVersion&&st==='idle';
@@ -571,8 +571,8 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
       current:w('已是最新版本','You’re up to date','已是最新版本'),
       available:w(`发现新版本 v${s.latestVersion||''}`,`Update available: v${s.latestVersion||''}`,`發現新版本 v${s.latestVersion||''}`),
       installing:w('正在下载并安装…','Downloading and installing…','正在下載並安裝…'),
-      installed:w('更新已安装，需要重载','Update installed; reload required','更新已安裝，需要重新載入'),
-      reloading:w('正在重新加载插件…','Reloading plugin…','正在重新載入外掛…'),
+      installed:w('更新已安装，正在自动重载…','Update installed; reloading…','更新已安裝，正在自動重載…'),
+      reloading:w('更新已安装，正在自动重载…','Update installed; reloading…','更新已安裝，正在自動重載…'),
       error:w('更新检查或安装失败','Update incomplete','更新未完成'),
     };
     text('upd-status',statusMap[st]||statusMap.error);
@@ -580,7 +580,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     text('upd-lat-lbl',w('最新版本','Latest','最新版本'));
     text('upd-cur',s.currentVersion?'v'+s.currentVersion:'—');
     text('upd-lat',s.latestVersion?'v'+s.latestVersion:'—');
-    const prog=s.progress||{},inProg=['checking','installing','reloading'].includes(st);
+    const prog=s.progress||{},inProg=['checking','installing','reloading','installed'].includes(st);
     const progWrap=$('upd-prog-wrap');progWrap.hidden=!inProg;
     if(inProg){
       const phaseLabels={
@@ -624,12 +624,12 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
       'install-location':w('插件路径校验失败（不支持符号链接）','Plugin path validation failed.','外掛路徑驗證失敗'),
       'plan-expired':w('更新信息已过期，请重新检查','Update plan expired; check again.','更新資訊已過期，請重新檢查'),
     };
-    const fb=st==='error'?(errMap[s.errorDetail]||errMap[s.error]||errMap.network):st==='available'?'':st==='installed'?w('点击重载后即可生效','Reload to activate new version','點擊重新載入即可生效'):w('自动后台检查已开启','Auto-check enabled','已開啟自動檢查');
+    const fb=st==='error'?(errMap[s.errorDetail]||errMap[s.error]||errMap.network):st==='available'?'':(st==='reloading'||st==='installed')?w('新版本将在几秒内自动生效','Activating new version shortly','新版本將在幾秒內自動生效'):w('自动后台检查已开启','Auto-check enabled','已開啟自動檢查');
     text('upd-feedback',fb);
     const act=$('upd-action');
     act.hidden=inProg;act.disabled=updateBusy||inProg||typeof onUpdate!=='function';
-    act.className=(st==='available'||st==='installed')?'primary':'';
-    text('upd-action',st==='available'?w('立即更新','Update now','立即更新'):st==='installed'?w('重新加载插件','Reload plugin','重新載入外掛'):st==='error'?w('重试','Retry','重試'):w('检查更新','Check now','檢查更新'));
+    act.className=st==='available'?'primary':'';
+    text('upd-action',st==='available'?w('立即更新','Update now','立即更新'):st==='error'?w('重试','Retry','重試'):w('检查更新','Check now','檢查更新'));
     if(updateMenu.isOpen()&&inProg){if(!updateTimer)updateTimer=setInterval(()=>void sendUpdate({action:'status'}),300);}
     else stopUpdatePoll();
   }
@@ -650,8 +650,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     if(updateBusy||disposed)return;
     const st=updateState?.state||'idle';
     if(st==='available'&&updateState.latestVersion)void sendUpdate({action:'apply',version:updateState.latestVersion});
-    else if(st==='installed')void sendUpdate({action:'reload'});
-    else void sendUpdate({action:'check'});
+    else if(!['checking','installing','reloading','installed'].includes(st))void sendUpdate({action:'check'});
   });
   const closeYear=(restore=true)=>yearMenu.close(restore);
   const closeMonth=(restore=true)=>monthMenu.close(restore);

@@ -19,10 +19,12 @@ test('same version has no apply action and an IDE response cannot become an App 
  const {service}=await setup(t,async()=>({host:'app',currentVersion:'0.8.6',latestVersion:'0.8.6',hasUpdate:false}));assert.equal((await service.check()).state,'current');await assert.rejects(()=>service.apply('0.8.6'));
  service.lastCheck=0;service.run=async()=>({host:'ide',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true});assert.equal((await service.check()).error,'verification');assert.equal(service.plan,null);
 });
-test('verified installation requires exact target version before reporting success',async t=>{
+test('verified installation requires exact target version before transitioning automatically to reloading',async t=>{
  let service;const fixture=await setup(t,async(_worker,args)=>{if(args[0]==='check')return {host:'app',currentVersion:'0.8.6',latestVersion:'0.8.7',hasUpdate:true};await writeFile(join(fixture.directory,'plugin.json'),JSON.stringify({name:'antigravity-context',version:'0.8.7'}));return {version:'0.8.7',verified:true};});service=fixture.service;
- await service.check();assert.equal((await service.apply('0.8.7')).state,'installing');await service.job;assert.equal(service.publicState().state,'installed');assert.equal(service.publicState().currentVersion,'0.8.7');
+ let reloads=0;service.onReload=()=>reloads++;
+ await service.check();assert.equal((await service.apply('0.8.7')).state,'installing');await service.job;assert.equal(service.publicState().state,'reloading');assert.equal(service.publicState().currentVersion,'0.8.7');
  assert.equal(JSON.parse(await readFile(join(fixture.directory,'plugin.json'))).version,'0.8.7');
+ await new Promise(r=>setTimeout(r,850));assert.equal(reloads,1);
 });
 test('failed check/install reports static error codes and retains the installed version',async t=>{
  const {service,directory}=await setup(t,async()=>{throw Error('network');});assert.equal((await service.check()).error,'network');
@@ -36,7 +38,7 @@ test('simultaneous apply clicks start one worker and check cannot replace instal
  const results=await Promise.all([service.apply('0.8.7'),service.apply('0.8.7'),service.apply('0.8.7')]);
  assert.ok(results.every(r=>r.state==='installing'));assert.equal((await service.check()).state,'installing');
  const job=service.job;finish();await job;assert.equal(installs,1);
- assert.equal((await service.check()).state,'installed','Reopening the dialog must retain the Reload action');
+ assert.equal((await service.check()).state,'reloading','Reopening the dialog after install retains reloading status');
  assert.deepEqual((await readdir(service.dataDir)).filter(n=>n.startsWith('plan-')),[]);
 });
 
