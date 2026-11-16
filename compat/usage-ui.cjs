@@ -8,7 +8,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     :host{position:relative;display:block;max-height:inherit;color:var(--pulse-foreground);font:13px/1.5 var(--pulse-font,"Google Sans Flex","Google Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif);font-variant-numeric:tabular-nums}
     *{box-sizing:border-box}button,select{font:inherit;color:inherit}button{cursor:pointer}
     button{border:1px solid transparent;background:transparent;border-radius:8px;transition:background-color 140ms ease,border-color 140ms ease,color 140ms ease,transform 120ms cubic-bezier(.23,1,.32,1)}
-    button:active:not([disabled]){transform:scale(.97)}button:focus-visible,select:focus-visible{outline:2px solid var(--pulse-accent);outline-offset:2px}button[disabled]{opacity:.35;cursor:default}
+    button:active:not([disabled]){transform:scale(.97)}button:focus-visible,select:focus-visible{outline:2px solid var(--pulse-accent);outline-offset:2px}button[disabled]{opacity:.35;cursor:default;pointer-events:none}
     .page{max-height:min(840px,calc(100dvh - 64px));padding:22px 24px 16px;overflow:auto;display:flex;flex-direction:column;background:var(--pulse-background);scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--pulse-border) transparent}.page:focus{outline:none}.page>*{flex:none}
     .top{display:flex;justify-content:space-between;gap:16px;align-items:center}
     .title-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -18,7 +18,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     .actions button{position:relative;display:inline-flex;align-items:center;justify-content:center;height:28px;min-width:28px;padding:0;color:var(--pulse-muted);border-radius:8px}
     .update-dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 1.5px var(--pulse-background);pointer-events:none}.update-dot[hidden]{display:none}
     .actions button#locale{min-width:28px;padding:0 8px;font-size:12px;font-weight:500}
-    .actions button:hover,.actions button:active:not([disabled]),.actions button[aria-expanded=true]{background:var(--pulse-hover);color:var(--pulse-foreground)}
+    .actions button:not([disabled]):hover,.actions button:active:not([disabled]),.actions button[aria-expanded=true]{background:var(--pulse-hover);color:var(--pulse-foreground)}
     .actions svg,.range svg,.menu-chevron,.menu-check,.intro-mark svg{display:block;fill:currentColor;stroke:none;flex:none}
     .actions svg{width:17px;height:17px}
     .locale-label{display:block;line-height:16px;text-align:center;font-size:12px}
@@ -94,7 +94,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   page.querySelector('.top').after(intro);
   const $=id=>view.getElementById(id),text=(id,value)=>{if($(id).textContent!==value)$(id).textContent=value;};
   let value=null,rangeMode='30d',year=null,anchorMonth=null,customFrom=null,customTo=null,selectedDate=null,disabledModels=new Set(),lastKey='',chartDataSig='',busy=false,opener=null;
-  let disposed=false,refreshMotion=null,refreshDelay=null,finishRefresh=null,refreshPending=false,syncSpinning=false,spinStarted=0,accountKey=null,tipTarget=null,tipModel=null,actionTipTarget=null;
+  let disposed=false,refreshMotion=null,refreshPending=false,syncSpinning=false,accountKey=null,tipTarget=null,tipModel=null,actionTipTarget=null;
   let progVisual=0,progTarget=0,progActive=false,progCompleting=false,progKnown=false,progDone=0,progTotal=0,progHoldTimer=null,progRaf=null,progLastTs=0;
   let updateState={state:'idle'},updateBusy=false,updateTimer=null;
   const zh=()=>language.language==='zh-CN'||language.language==='zh-TW',tw=()=>language.language==='zh-TW',w=(cn,en,twText)=>(tw()&&twText!==undefined)?twText:(zh()?cn:en);
@@ -758,26 +758,16 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   }
   function syncRefreshSpin(){
     if(disposed)return;
-    const button=$('refresh'),turn=600,shouldSpin=refreshPending||syncSpinning;
+    const button=$('refresh'),shouldSpin=refreshPending||syncSpinning;
     if(shouldSpin){
-      clearTimeout(refreshDelay);refreshDelay=null;finishRefresh=null;
       busy=true;button.disabled=true;button.setAttribute('aria-busy','true');
       if(!refreshMotion){
-        spinStarted=performance.now();
-        refreshMotion=button.querySelector('svg').animate([{transform:'rotate(0deg)'},{transform:'rotate(360deg)'}],{duration:turn,iterations:Infinity});
+        refreshMotion=button.querySelector('svg').animate([{transform:'rotate(0deg)'},{transform:'rotate(360deg)'}],{duration:600,iterations:Infinity});
       }
       return;
     }
-    if(!refreshMotion){busy=false;button.disabled=false;button.setAttribute('aria-busy','false');return;}
-    if(refreshDelay)return;
-    // Finish the active turn cleanly so stopping never snaps the icon back.
-    const elapsed=performance.now()-spinStarted,remaining=Math.max(turn,Math.ceil(elapsed/turn)*turn)-elapsed;
-    refreshDelay=setTimeout(()=>{
-      refreshDelay=null;finishRefresh=null;
-      if(disposed)return;
-      if(refreshPending||syncSpinning){syncRefreshSpin();return;}
-      refreshMotion?.cancel();refreshMotion=null;busy=false;button.disabled=false;button.setAttribute('aria-busy','false');
-    },Math.max(0,remaining));
+    refreshMotion?.cancel();refreshMotion=null;
+    busy=false;button.disabled=false;button.setAttribute('aria-busy','false');
   }
   $('refresh').addEventListener('click',async()=>{
     if(busy||disposed)return;refreshPending=true;syncRefreshSpin();
@@ -804,7 +794,7 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   function conceal(){
     if(dialog.matches(':popover-open'))dialog.hidePopover();dialog.removeAttribute('open');
   }
-  function close(){languagePicker.close(false);stopUpdatePoll();closeMenus();finishProgressBar();syncSpinning=false;clearTimeout(refreshDelay);refreshDelay=null;finishRefresh=null;refreshMotion?.cancel();refreshMotion=null;if(!refreshPending){busy=false;$('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false');}conceal();$('tip').hidden=true;hideActionTip();opener?.focus({preventScroll:true});}
+  function close(){languagePicker.close(false);stopUpdatePoll();closeMenus();finishProgressBar();syncSpinning=false;refreshMotion?.cancel();refreshMotion=null;if(!refreshPending){busy=false;$('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false');}conceal();$('tip').hidden=true;hideActionTip();opener?.focus({preventScroll:true});}
   $('close').addEventListener('click',close);dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close();}});
   const contentKey=data=>JSON.stringify([{...data,updatedAt:undefined},language.language,themeSignature()]);
   const within=event=>event.composedPath().includes(dialog);
@@ -850,5 +840,5 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   return {open(data,trigger,nextUpdate){if(nextUpdate!==undefined)updateState=nextUpdate;if(!data||disposed)return;finishProgressBar();accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();},
     update(data,nextUpdate){if(disposed)return;if(nextUpdate!==undefined){updateState=nextUpdate;renderUpdate();}if(!data){if(!value)return;value=null;lastKey='';if(dialog.open)render();return;}if(accountKey&&accountKey!==data.accountKey){selectedDate=null;disabledModels.clear();year=data.today.slice(0,4);anchorMonth=data.today.slice(0,7);const d30=add(data.today,-29);customFrom=data.firstDate&&d30<data.firstDate?data.firstDate:d30;customTo=data.today;}accountKey=data.accountKey;value=normalizeUsage(data);if(!dialog.open)return;const key=contentKey(data);if(key===lastKey)return;lastKey=key;render();},
     restoreModal(){if(!disposed&&dialog.open&&dialog.isConnected&&!dialog.matches(':popover-open')){closeMenus();present();}},
-    close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();cancelProgressTimers();languagePicker.dispose();themeObserver.disconnect();clearTimeout(refreshDelay);finishRefresh?.();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};
+    close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();cancelProgressTimers();languagePicker.dispose();themeObserver.disconnect();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};
 };

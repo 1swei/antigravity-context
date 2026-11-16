@@ -762,11 +762,11 @@ module.exports = function installAgPulseInlineWidget() {
     request.promise=(async()=>{
       try{if(pending)await refreshRequest;if(!disposed&&epoch===requestEpoch)await refresh(true,syncUsage);}
       finally{
-        // A fast cached response still needs visible press feedback. This does
-        // not delay data updates; only the indicator has a 250ms minimum.
+        if(manualRequest===request)manualRequest=null;
         const remaining=250-(performance.now()-started);
-        if(remaining>0)await new Promise(resolve=>setTimeout(resolve,remaining));
-        if(manualRequest===request){refreshBusy(false);manualRequest=null;}
+        const stopBusy=()=>{if(!disposed&&!manualRequest)refreshBusy(false);};
+        if(remaining>0)setTimeout(stopBusy,remaining);
+        else stopBusy();
       }
     })();
     return request.promise;
