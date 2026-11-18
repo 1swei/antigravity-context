@@ -381,6 +381,7 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     window: globalThis.window,
     document: globalThis.document,
     localStorage: globalThis.localStorage,
+    sessionStorage: globalThis.sessionStorage,
     matchMedia: globalThis.matchMedia,
     getComputedStyle: globalThis.getComputedStyle,
     MutationObserver: globalThis.MutationObserver,
@@ -393,10 +394,12 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     location: globalThis.location,
   };
   const storage = new Map([['ag-pulse-language', 'zh-CN']]);
+  const sStorage = new Map();
   const mm = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
 
   globalThis.document = doc;
-  globalThis.localStorage = { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, String(v)) };
+  globalThis.localStorage = { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, String(v)), removeItem: k => storage.delete(k) };
+  globalThis.sessionStorage = { getItem: k => sStorage.get(k) ?? null, setItem: (k, v) => sStorage.set(k, String(v)), removeItem: k => sStorage.delete(k) };
   globalThis.matchMedia = mm;
   globalThis.CSS = { supports: () => true };
   globalThis.innerWidth = 1000;
@@ -462,8 +465,14 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
 
   try {
     installInline();
+    // Cold mount with no snapshot shows quiet skeleton row while waiting for initial metrics (never blank, never fake 0s)
+    assert.equal(createdIds.get('skel-row').hidden, false);
+    assert.equal(createdIds.get('rounds').parentElement.hidden, true);
+    assert.equal(createdIds.get('cache-rate').parentElement.hidden, true);
+    assert.equal(createdIds.get('context-percent').parentElement.hidden, true);
     await new Promise(r => setTimeout(r, 30));
     assert.ok(metricsCalls >= 1);
+    assert.equal(createdIds.get('skel-row').hidden, true);
     // 1. Empty new conversation: 0% & 0 everywhere, never '—'
     assert.equal(createdIds.get('context-percent').textContent, '0%');
     assert.equal(createdIds.get('context-summary-pct').textContent, '0%');
@@ -644,6 +653,48 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     assert.equal(createdIds.get('context-note').hidden, false);
     assert.equal(createdIds.get('context-note').textContent, '刚完成上下文压缩，精确构成将在下一轮请求后更新。');
     assert.equal(createdIds.get('ctx-seg-other').style.getPropertyValue('width'), '18.75%');
+
+    // 7. Transient offline bridge response during reload preserves prior active metrics instead of resetting to 0
+    hostMetrics = { connection: 'offline', error: '等待 Antigravity Context 重新连接', speed: null, groups: [] };
+    await new Promise(r => setTimeout(r, 3200));
+    assert.equal(createdIds.get('tps').textContent, '228');
+    assert.equal(createdIds.get('context-percent').textContent, '19%');
+
+    // 8. Hot-reload seamless handover preserves numbers immediately on frame 1 without resetting to 0
+    hostMetrics = {
+      connection: 'live',
+      preferences: { language: 'zh-CN', revision: 1, languageGuideDismissed: true },
+      speed: {
+        conversationId: '11111111-1111-1111-1111-111111111111',
+        rounds: 2, steps: 44, measuredRequests: 10, tps: 228.4, latestTps: 228.4, latestRateStatus: 'ok',
+        modelSeconds: 206, toolSeconds: 175, ttftSeconds: 0.9, model: 'Claude Sonnet 4.6',
+        counts: { responseOutput: 37811, thinkingOutput: 0 },
+        context: { usedTokens: 48640, maxTokens: 256000, usedFraction: 0.19, remainingFraction: 0.81, estimated: true },
+        contextBreakdown: { version: 1, source: 'host-breakdown', compactedPending: false, systemTokens: 1000, extensionsTokens: 1000, toolsTokens: 20000, messagesTokens: 26640, totalTokens: 48640 },
+        cache: { hitRate: 0.98, totalTokens: 3244160, cachedTokens: 3131648, uncachedTokens: 74701, cacheWriteTokens: 0, outputTokens: 37811, measuredRequests: 10 },
+        tokens: { totalTokens: 3244160, cachedTokens: 3131648, uncachedTokens: 74701, cacheWriteTokens: 0, outputTokens: 37811, measuredRequests: 10, inputRequests: 10, outputRequests: 10, uncachedRequests: 10, cachedRequests: 10, cacheWriteRequests: 10 },
+      },
+      usage: { todayTokens: 12000, monthTokens: 340000, today: '2026-11-14', models: [], records: {} },
+    };
+    await new Promise(r => setTimeout(r, 3200));
+    globalThis.window.__agPulseDispose();
+    assert.ok(globalThis.window.__agPulseHandover);
+    installInline();
+    assert.equal(globalThis.window.__agPulseHandover, undefined);
+    assert.equal(createdIds.get('skel-row').hidden, true);
+    assert.equal(createdIds.get('rounds').parentElement.hidden, false);
+    assert.equal(createdIds.get('tps').textContent, '228');
+    assert.equal(createdIds.get('context-percent').textContent, '19%');
+    await new Promise(r => setTimeout(r, 30));
+
+    // 9. Across stop/restart without in-memory handover (e.g. plugin toggle off/on or page reload), sessionStorage restores real values on frame 1 without skeleton/0 flash
+    assert.equal(sStorage.has('ag-pulse-snap-v1'), true);
+    globalThis.window.__agPulseDispose();
+    delete globalThis.window.__agPulseHandover;
+    installInline();
+    assert.equal(createdIds.get('skel-row').hidden, true);
+    assert.equal(createdIds.get('tps').textContent, '228');
+    assert.equal(createdIds.get('context-percent').textContent, '19%');
   } finally {
     globalThis.window?.__agPulseDispose?.();
     for (const [k, v] of Object.entries(prev)) {

@@ -31,6 +31,35 @@ module.exports = function installAgPulseInlineWidget() {
   const densityEase='cubic-bezier(0.32,0.72,0,1)';
   let usageGuideDismissed=false;
   let hoveredCtxRow=null,baseCtxNoteKey='';
+  const SNAP_KEY='ag-pulse-snap-v1',SNAP_TTL=10*60*1000;
+  const sanitizeSnap=value=>{
+    if(!value||(!value.speed&&!value.usage))return null;
+    return {connection:'stale',speed:value.speed||null,usage:value.usage||null,collection:value.collection||null,groups:value.groups||[]};
+  };
+  const saveSessionSnap=(id,value)=>{
+    const snap=sanitizeSnap(value);
+    if(!id||!snap)return;
+    try{
+      if(typeof sessionStorage==='undefined')return;
+      let cache={};
+      try{cache=JSON.parse(sessionStorage.getItem(SNAP_KEY)||'{}')||{};}catch{cache={};}
+      if(typeof cache!=='object'||Array.isArray(cache))cache={};
+      const now=Date.now();
+      cache[id]={data:snap,at:now};
+      const entries=Object.entries(cache).filter(([,v])=>v&&Number.isFinite(v.at)&&now-v.at<SNAP_TTL).sort((a,b)=>b[1].at-a[1].at).slice(0,6);
+      sessionStorage.setItem(SNAP_KEY,JSON.stringify(Object.fromEntries(entries)));
+    }catch{}
+  };
+  const loadSessionSnap=id=>{
+    if(!id)return null;
+    try{
+      if(typeof sessionStorage==='undefined')return null;
+      const cache=JSON.parse(sessionStorage.getItem(SNAP_KEY)||'null');
+      const entry=cache?.[id],now=Date.now();
+      if(!entry||!entry.data||!Number.isFinite(entry.at)||now-entry.at>SNAP_TTL||now<entry.at-5000)return null;
+      return entry.data;
+    }catch{return null;}
+  };
   function syncGuide(value){if(value?.usageGuideDismissed===true){usageGuideDismissed=true;usageDashboard?.syncGuideDismissed();}}
   const preferences=language.connectPreferences({
     read:async()=>{const value=await window.agPulseHost.getPreferences();syncGuide(value);return value;},
@@ -120,7 +149,18 @@ module.exports = function installAgPulseInlineWidget() {
     lastConversation=id;requestEpoch++;pending=false;refreshRequest=null;lastFetch=0;
     stopDensityMotion();densityFrame=null;densityProbe=null;
     manualRequest=null;refreshBusy(false);
-    data={connection:'offline',groups:[],speed:null};hide();
+    let restored=null;
+    try{
+      const h=window.__agPulseHandover;
+      if(h){
+        delete window.__agPulseHandover;
+        if(h.conversationId===id&&Number.isFinite(h.at)&&Date.now()-h.at<30000&&Date.now()>=h.at-5000&&h.data){
+          restored=sanitizeSnap(h.data);
+        }
+      }
+    }catch{}
+    if(!restored&&id)restored=loadSessionSnap(id);
+    data=restored||{connection:'connecting',groups:[],speed:null};hide();
     // Navigation has its own refresh budget. A request from the old composer
     // must neither block the new route nor reset its polling clock on arrival.
     queueMicrotask(()=>{if(!disposed)refresh();});return true;
@@ -564,8 +604,10 @@ module.exports = function installAgPulseInlineWidget() {
       :host(.compact) .bar{gap:3px}:host(.compact) .chip{padding:3px 6px;gap:4px;font-size:11.5px}
       :host(.tight) .bar{gap:2px}:host(.tight) .chip{padding:3px 5px;gap:4px;font-size:11.5px}:host(.tight) [data-card="speed"] .rounds,:host(.tight) [data-card="speed"] .sep,:host(.tight) [data-card="cache"] [data-i18n="cache"]{display:none}
       :host(.icons-only) .bar{gap:2px}:host(.icons-only) .chip{flex:0 0 24px;width:24px;min-width:24px;height:24px;padding:0;gap:0;justify-content:center}:host(.icons-only) .chip:focus-visible{outline-offset:-2px}:host(.icons-only) .chip>:not(svg):not(.context-ring){display:none}
-      @media(prefers-reduced-motion:reduce){.ctx-seg,.chip{transition:none}}
+      .skel-row{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 4px;flex:none;pointer-events:none;user-select:none}.skel-row[hidden]{display:none}.skel-pill{display:block;height:14px;border-radius:6px;background:var(--pulse-hover);animation:ag-pulse-skel 1.6s ease-in-out infinite}.skel-s{width:58px}.skel-m{width:118px}.skel-xs{width:40px}@keyframes ag-pulse-skel{0%,100%{opacity:.48}50%{opacity:.92}}
+      @media(prefers-reduced-motion:reduce){.ctx-seg,.chip{transition:none}.skel-pill{animation:none}}
     </style><div class="bar" data-i18n-aria="strip" aria-label="Dashboard statistics">
+      <span class="skel-row" id="skel-row" aria-hidden="true" hidden><i class="skel-pill skel-s"></i><i class="skel-pill skel-m"></i><i class="skel-pill skel-xs"></i></span>
       <button class="chip" data-card="speed" data-i18n-aria="session" hidden aria-controls="speed-card" aria-expanded="false">${svg('speed')}<span class="rounds" id="rounds" hidden>0 轮 0 步</span><span class="sep" aria-hidden="true" hidden>·</span><span id="tps">0</span><span>tok/s</span></button>
       <button class="chip" data-card="cache" data-i18n-aria="cacheTitle" hidden aria-controls="cache-card" aria-expanded="false">${svg('cache')}<svg class="collection-warning" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 15 14H1ZM8 6v4m0 2v.1"/></svg><svg class="collection-processing" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5M8 1v3m3-2v3"/></svg><span class="collection-label"></span><span class="cache-total" id="cache-total">0 tok</span><span class="sep" aria-hidden="true">·</span><span data-i18n="cache">Cache hit</span><span id="cache-rate">0%</span></button>
       <button class="chip" data-card="context" data-i18n-aria="context" hidden aria-controls="context-card" aria-expanded="false"><span class="context-ring" id="context-ring" aria-hidden="true"></span><span id="context-percent">0%</span></button>
@@ -684,14 +726,16 @@ module.exports = function installAgPulseInlineWidget() {
       const size=notice.querySelector('.collection-budget-size');hidden(size,!valid(limit)||!valid(observed));
       if(valid(limit)&&valid(observed))set('.collection-budget-size',t('collectionObserved',{observed:format(observed),limit:format(limit)}));
     }
-    const hideSessionChips=!lastConversation&&!surface?.showEmpty&&!data.usage&&data.connection!=='live';
+    const waitingInitial=data?.connection==='connecting'&&!data.speed&&!data.usage;
+    hidden($('skel-row'),!waitingInitial);
+    const hideSessionChips=waitingInitial||(!lastConversation&&!surface?.showEmpty&&!data.usage&&data.connection!=='live');
     hidden(root.querySelector('[data-card="speed"]'),hideSessionChips);
     hidden(root.querySelector('[data-card="cache"]'),hideSessionChips);
     const context=speed?.context,hasCapacity=typeof context?.usedFraction==='number'&&Number.isFinite(context.usedFraction);
     const usedFraction=hasCapacity?Math.max(0,Math.min(1,context.usedFraction)):null;
     const usedPct=usedFraction!==null?Math.round(usedFraction*100):0;
     const hasUsedTokens=typeof context?.usedTokens==='number'&&Number.isFinite(context.usedTokens);
-    hidden(root.querySelector('[data-card="context"]'),false);
+    hidden(root.querySelector('[data-card="context"]'),waitingInitial);
     text('context-percent',`${usedPct}%`);
     style($('context-ring'),'--used-angle',`${usedFraction!==null?usedFraction*360:0}deg`);
     style($('context-ring'),'--ctx-ring-color',usedFraction>=.9?'var(--pulse-danger)':usedFraction>=.75?'var(--pulse-warning)':'var(--pulse-value,var(--pulse-muted))');
@@ -813,6 +857,7 @@ module.exports = function installAgPulseInlineWidget() {
     const taskNote=taskUsage?.state==='loading'?t('taskLoading'):taskUsage?.state==='partial'?t(taskUsage.loadedSubagents===0?'taskCurrentOnly':'taskPartial'):'';
     text('cache-note',taskNote);hidden($('cache-note'),!taskNote);
     fit();position();
+    if(data.connection==='live'&&(data.speed||data.usage))saveSessionSnap(lastConversation,data);
   }
   function refreshBusy(busy){
     for(const button of root?.querySelectorAll('.refresh')||[]){
@@ -846,7 +891,7 @@ module.exports = function installAgPulseInlineWidget() {
     const current=()=>!disposed&&epoch===requestEpoch&&conversation===conversationId()&&conversation===lastConversation&&node?.isConnected;
     pending=true;lastFetch=Date.now();
     refreshRequest=(async()=>{
-      try{const syncParam=syncUsage===true?{usageSync:true}:syncUsage==='refresh'?{usageRefresh:true}:{};const result=await window.agPulseHost.getMetrics({conversationId:conversation,force,...syncParam});if(!current())return;node.style.visibility=result.enabled===false?'hidden':'';if(result.enabled===false){hide();return;}if(!conversation||result.speed&&result.speed.conversationId!==conversation)result.speed=null;data=result;if(result.preferences){syncGuide(result.preferences);preferences.sync(result.preferences);}if(Object.hasOwn(result,'theme'))themeController?.setHostTheme(result.theme);render();
+      try{const syncParam=syncUsage===true?{usageSync:true}:syncUsage==='refresh'?{usageRefresh:true}:{};const result=await window.agPulseHost.getMetrics({conversationId:conversation,force,...syncParam});if(!current())return;node.style.visibility=result.enabled===false?'hidden':'';if(result.enabled===false){hide();return;}if(!conversation||result.speed&&result.speed.conversationId!==conversation)result.speed=null;if(result.connection==='offline'&&!result.speed&&data?.speed&&data.speed.conversationId===conversation){data={...data,...result,connection:'stale',speed:data.speed,usage:result.usage??data.usage,collection:result.collection??data.collection};}else{data=result;}if(result.preferences){syncGuide(result.preferences);preferences.sync(result.preferences);}if(Object.hasOwn(result,'theme'))themeController?.setHostTheme(result.theme);render();
         const modalSync=Boolean(usageDashboard?.isOpen&&!document.hidden&&(data?.usage?.syncMode||(data?.usage?.syncing&&data?.usage?.summaryStale!==true)));
         clearTimeout(modalSyncTimer);modalSyncTimer=null;
         if(modalSync){modalSyncTimer=setTimeout(()=>{modalSyncTimer=null;if(!disposed&&usageDashboard?.isOpen&&!document.hidden)refresh();},250);modalSyncTimer.unref?.();}
@@ -864,6 +909,8 @@ module.exports = function installAgPulseInlineWidget() {
   densityMedia.addEventListener('change',stopDensityMotion);
   const timerId=setInterval(()=>{mount();fit();position();if(conversationId()!==lastConversation||Date.now()-lastFetch>(document.hidden?10000:2200))refresh();},1000);
   window.__agPulseDispose=()=>{
+    if(data?.speed||data?.usage){try{window.__agPulseHandover={conversationId:lastConversation,data,at:Date.now()};}catch{}saveSessionSnap(lastConversation,data);}
+    else{try{delete window.__agPulseHandover;}catch{}}
     disposed=true;requestEpoch++;pending=false;refreshRequest=null;stopDensityMotion();densityFrame=null;densityProbe=null;
     clearInterval(timerId);clearTimeout(modalSyncTimer);modalSyncTimer=null;clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();usageDashboard?.dispose();node?.remove();
     document.removeEventListener('keydown',onKey);document.removeEventListener('pointerdown',onPointer);document.removeEventListener('focusin',onFocus);
