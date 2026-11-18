@@ -49,7 +49,7 @@ module.exports = function installAgPulseInlineWidget() {
     if(!found||typeof found!=='object'||!found.reopenModal)return null;
     const now=Date.now();
     if(!Number.isFinite(found.at)||now-found.at>UPDATE_HANDOVER_TTL||now<found.at-5000)return null;
-    return {reopenModal:true,toVersion:typeof found.toVersion==='string'&&found.toVersion?found.toVersion:null};
+    return {reopenModal:true,reopenUpdateMenu:Boolean(found.reopenUpdateMenu),toVersion:typeof found.toVersion==='string'&&found.toVersion?found.toVersion:null};
   };
   const sanitizeSnap=value=>{
     if(!value||(!value.speed&&!value.usage))return null;
@@ -720,16 +720,19 @@ module.exports = function installAgPulseInlineWidget() {
         usageDashboard.open(cachedUsage,trigger,data?.update);
         const liveUpdate=data?.update;
         const settled=Boolean(liveUpdate&&!['installing','installed','reloading'].includes(liveUpdate.state));
-        usageDashboard.setUpdateNotice(settled
-          ?{state:'reloaded',version:liveUpdate.currentVersion||handover.toVersion}
-          :{state:'reloading',version:handover.toVersion});
+        if(handover.reopenUpdateMenu){
+          usageDashboard.showUpdateMenu(settled
+            ?{reloadedVersion:liveUpdate.currentVersion||handover.toVersion}
+            :{reloadingVersion:handover.toVersion});
+        }
+        try{window.__agPulseRetireModal?.();}catch{}
         awaitingReloadConfirmVersion=settled?undefined:handover.toVersion;
       }else if(awaitingReloadConfirmVersion!==undefined){
         const liveUpdate=data?.update;
         if(liveUpdate&&!['installing','installed','reloading'].includes(liveUpdate.state)){
           const version=liveUpdate.currentVersion||awaitingReloadConfirmVersion||null;
           awaitingReloadConfirmVersion=undefined;
-          if(usageDashboard.isOpen)usageDashboard.setUpdateNotice({state:'reloaded',version});
+          if(usageDashboard.isOpen)usageDashboard.confirmUpdateReloaded(version);
         }
       }
     }
@@ -960,6 +963,7 @@ module.exports = function installAgPulseInlineWidget() {
     const isUpdatingReload=['installed','reloading'].includes(updState)||(updState==='installing'&&dashUpdate?.busy);
     const updateReload=isUpdatingReload&&usageDashboard?.isOpen?{
       reopenModal:true,
+      reopenUpdateMenu:Boolean(dashUpdate?.menuOpen),
       toVersion:dashUpdate?.currentVersion||dashUpdate?.latestVersion||data?.update?.currentVersion||data?.update?.latestVersion||null,
       at:Date.now(),
     }:null;
@@ -967,7 +971,30 @@ module.exports = function installAgPulseInlineWidget() {
     if(data?.speed||data?.usage||updateReload){try{window.__agPulseHandover={conversationId:lastConversation,data,at:Date.now(),...(updateReload?{updateReload}:{})};}catch{}saveSessionSnap(lastConversation,data);}
     else{try{delete window.__agPulseHandover;}catch{}}
     disposed=true;requestEpoch++;pending=false;refreshRequest=null;stopDensityMotion();densityFrame=null;densityProbe=null;
-    clearInterval(timerId);clearTimeout(modalSyncTimer);modalSyncTimer=null;clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();usageDashboard?.dispose();node?.remove();
+    clearInterval(timerId);clearTimeout(modalSyncTimer);modalSyncTimer=null;clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();
+    if(updateReload&&node&&usageDashboard){
+      try{window.__agPulseRetireModal?.();}catch{}
+      const parkedNode=node,parkedDash=usageDashboard,parkedMenu=Boolean(dashUpdate?.menuOpen);
+      const bar=root?.querySelector?.('.bar');if(bar)bar.hidden=true;
+      parkedNode.id='';parkedNode.removeAttribute('id');
+      parkedNode.style.cssText='position:fixed;width:0;height:0;margin:0;overflow:visible;pointer-events:none;z-index:2147482999;';
+      document.body?.append?.(parkedNode);
+      let retireTimer=null;
+      const retire=()=>{
+        clearTimeout(retireTimer);retireTimer=null;
+        if(window.__agPulseRetireModal===retire)delete window.__agPulseRetireModal;
+        parkedDash.dispose();parkedNode.remove();
+      };
+      retireTimer=setTimeout(retire,20000);retireTimer.unref?.();
+      window.__agPulseRetireModal=retire;
+      parkedDash.parkForReload(parkedMenu,()=>{
+        try{if(window.__agPulseHandover?.updateReload)delete window.__agPulseHandover.updateReload;}catch{}
+        try{if(typeof sessionStorage!=='undefined')sessionStorage.removeItem(UPDATE_HANDOVER_KEY);}catch{}
+        retire();
+      });
+    }else{
+      usageDashboard?.dispose();node?.remove();
+    }
     document.removeEventListener('keydown',onKey);document.removeEventListener('pointerdown',onPointer);document.removeEventListener('focusin',onFocus);
     document.removeEventListener('scroll',scheduleLayout,true);window.removeEventListener('resize',scheduleLayout);
     densityMedia.removeEventListener('change',stopDensityMotion);

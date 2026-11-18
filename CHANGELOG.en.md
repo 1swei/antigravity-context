@@ -3,8 +3,15 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.8` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.9` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-18`
+
+---
+
+## v1.0.9 (`2026-11-18`)
+
+- **Seamless In-Place Modal Swap Across Update Reload (Zero Close/Reopen Flicker)**: When an update triggers a reload while the usage modal (and update popover) is open, the outgoing instance parks the modal safely in-place instead of tearing it down during the 1–2s sidecar restart gap, and the incoming instance swaps in the new modal DOM in the exact same synchronous frame (still allowing manual close/cancel at any time).
+- **Compact Success State Inside Update Popover**: Removed the extra full-width banner inside the usage modal and now surfaces the green **"Update complete; reloaded"** / **"Now running latest version"** status directly inside the top-right update popover (`#update-menu`).
 
 ---
 

@@ -983,7 +983,7 @@ test('usage-ui removes weekly/composition views and coordinates unified date fil
       replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
       remove() {},
       closest: () => null,
-      matches: () => false,
+      matches: sel => (sel === ':popover-open' ? el.open : false),
       showPopover() { el.open = true; },
       hidePopover() { el.open = false; },
       focus() { focusCalls.push(el); },
@@ -1295,7 +1295,7 @@ test('usage-ui header update button shows red dot on available update and suppor
       replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
       remove() {},
       closest: () => null,
-      matches: () => false,
+      matches: sel => (sel === ':popover-open' ? el.open : false),
       showPopover() { el.open = true; },
       hidePopover() { el.open = false; },
       focus() { focusCalls.push(el); },
@@ -1532,27 +1532,21 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('upd-feedback').textContent, '新版本将在几秒内自动生效');
     assert.equal(idMap.get('upd-action').hidden, true);
     assert.equal(idMap.get('update-dot').hidden, true);
-    assert.deepEqual(dash.getUpdateState(), { state: 'reloading', currentVersion: '1.0.2', latestVersion: '1.0.2', progress: { phase: 'complete' }, busy: false });
+    assert.deepEqual(dash.getUpdateState(), { state: 'reloading', currentVersion: '1.0.2', latestVersion: '1.0.2', progress: { phase: 'complete' }, busy: false, menuOpen: true });
+    assert.equal(idMap.get('update-notice'), undefined);
 
-    dash.setUpdateNotice({ state: 'reloading', version: '1.0.2' });
-    assert.equal(idMap.get('update-notice').hidden, false);
-    assert.equal(idMap.get('update-notice').dataset.state, 'reloading');
-    assert.equal(idMap.get('update-notice-title').textContent, '正在完成插件重载…');
-    assert.equal(idMap.get('update-notice-detail').textContent, '正在激活 v1.0.2');
+    dash.confirmUpdateReloaded('1.0.2');
+    assert.equal(idMap.get('upd-status').textContent, '更新成功，插件已自动重载');
+    assert.equal(idMap.get('upd-status').dataset.state, 'reloaded');
+    assert.equal(idMap.get('upd-feedback').textContent, '已切换至最新版本');
+    assert.equal(idMap.get('upd-cur').textContent, 'v1.0.2');
+    assert.equal(idMap.get('upd-lat').textContent, 'v1.0.2');
+    assert.equal(idMap.get('upd-prog-wrap').hidden, true);
+    assert.equal(idMap.get('upd-action').hidden, false);
+    assert.equal(idMap.get('upd-action').textContent, '检查更新');
 
-    dash.setUpdateNotice({ state: 'reloaded', version: '1.0.2' });
-    assert.equal(idMap.get('update-notice').hidden, false);
-    assert.equal(idMap.get('update-notice').dataset.state, 'reloaded');
-    assert.equal(idMap.get('update-notice-title').textContent, '更新成功，插件已自动重载');
-    assert.equal(idMap.get('update-notice-detail').textContent, '当前版本 v1.0.2');
-
-    idMap.get('update-notice-close').dispatch('click');
-    assert.equal(idMap.get('update-notice').hidden, true);
-
-    dash.setUpdateNotice({ state: 'reloaded', version: '1.0.2' });
-    assert.equal(idMap.get('update-notice').hidden, false);
     dash.close();
-    assert.equal(idMap.get('update-notice').hidden, true);
+    assert.equal(idMap.get('update-menu').open, false);
     dash.dispose();
   } finally {
     globalThis.document = prevDoc;
@@ -1782,36 +1776,62 @@ test('inline-widget reopens usage modal after update reload and shows reload-suc
     createdIds.get('upd-action').dispatch('click');
     await new Promise(r => setImmediate(r));
 
-    // Sidecar shuts down and disposes old widget while modal is open
+    // Sidecar shuts down and disposes old widget while modal & update-menu are open:
+    // modal must stay open in-place (parked) rather than closing and popping back open.
+    const oldBar = createdIds.get('ag-pulse-status-bar');
+    const oldDialog = createdIds.get('usage-dashboard');
+    const oldUpdateMenu = createdIds.get('update-menu');
+    const oldClose = createdIds.get('close');
     globalThis.window.__agPulseDispose();
+    assert.equal(oldDialog.open, true, 'parked usage modal must remain open during reload');
+    assert.equal(oldUpdateMenu.open, true, 'parked update popover must remain open during reload');
+    assert.equal(oldBar.isConnected, true);
+    assert.equal(oldBar.id, '');
+    assert.equal(typeof globalThis.window.__agPulseRetireModal, 'function');
     assert.equal(globalThis.window.__agPulseHandover?.updateReload?.reopenModal, true);
+    assert.equal(globalThis.window.__agPulseHandover?.updateReload?.reopenUpdateMenu, true);
     assert.equal(globalThis.window.__agPulseHandover?.updateReload?.toVersion, '1.0.8');
     assert.equal(sStorage.has('ag-pulse-update-reload-v1'), true);
 
-    // New sidecar boots at v1.0.8 and mounts new widget
+    // New sidecar boots at v1.0.8, swaps in-place synchronously, and retires old parked modal
     currentVersion = '1.0.8';
     createdIds = new Map();
     installInline();
-    assert.equal(createdIds.get('usage-dashboard').open, true, 'usage modal should reopen immediately after update reload');
+    assert.equal(createdIds.get('usage-dashboard').open, true, 'new usage modal opens seamlessly in-place');
+    assert.equal(createdIds.get('update-menu').open, true, 'new update popover remains open in-place');
+    assert.equal(oldDialog.open, false, 'old parked modal must be retired in the same frame');
+    assert.equal(oldBar.isConnected, false, 'old parked host must be removed from DOM');
+    assert.equal(globalThis.window.__agPulseRetireModal, undefined);
     assert.equal(sStorage.has('ag-pulse-update-reload-v1'), false);
     await new Promise(r => setTimeout(r, 30));
     assert.equal(createdIds.get('usage-dashboard').open, true);
     assert.equal(createdIds.get('version-tag').textContent, 'v1.0.8');
-    assert.equal(createdIds.get('update-notice').hidden, false);
-    assert.equal(createdIds.get('update-notice').dataset.state, 'reloaded');
-    assert.equal(createdIds.get('update-notice-title').textContent, '更新成功，插件已自动重载');
-    assert.equal(createdIds.get('update-notice-detail').textContent, '当前版本 v1.0.8');
+    assert.equal(createdIds.get('update-notice'), undefined);
+    assert.equal(createdIds.get('upd-status').textContent, '更新成功，插件已自动重载');
+    assert.equal(createdIds.get('upd-status').dataset.state, 'reloaded');
+    assert.equal(createdIds.get('upd-feedback').textContent, '已切换至最新版本');
+    assert.equal(createdIds.get('upd-cur').textContent, 'v1.0.8');
+    assert.equal(createdIds.get('upd-lat').textContent, 'v1.0.8');
 
-    // Negative case: closing modal before an unrelated reload must not auto-open modal
-    createdIds.get('close').dispatch('click');
-    assert.equal(createdIds.get('usage-dashboard').open, false);
+    // User cancelling/closing parked modal mid-reload must prevent reopening on new mount
+    createdIds.get('upd-action').dispatch('click'); // Check for updates from reloaded state
+    await new Promise(r => setImmediate(r));
+    createdIds.get('upd-action').dispatch('click'); // Apply update
+    await new Promise(r => setImmediate(r));
+    const parkedDialog2 = createdIds.get('usage-dashboard');
+    const parkedClose2 = createdIds.get('close');
     globalThis.window.__agPulseDispose();
-    assert.equal(globalThis.window.__agPulseHandover?.updateReload, undefined);
+    assert.equal(parkedDialog2.open, true);
+    parkedClose2.dispatch('click');
+    assert.equal(parkedDialog2.open, false);
+    assert.equal(sStorage.has('ag-pulse-update-reload-v1'), false);
     createdIds = new Map();
     installInline();
     await new Promise(r => setTimeout(r, 20));
     assert.equal(createdIds.get('usage-dashboard').open, false);
+    assert.equal(oldClose.tagName, 'BUTTON');
   } finally {
+    globalThis.window?.__agPulseRetireModal?.();
     globalThis.window?.__agPulseDispose?.();
     for (const [k, v] of Object.entries(prev)) {
       if (v === undefined) delete globalThis[k];
