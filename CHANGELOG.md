@@ -3,8 +3,17 @@
 **简体中文** · [English](CHANGELOG.en.md)
 
 - **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
-- **当前版本**：`1.0.7`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
+- **当前版本**：`1.0.8`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
 - **更新时间**：`2026-11-18`
+
+---
+
+## v1.0.8（`2026-11-18`）
+
+- **更新自动重载后保留用量弹窗并提示成功**：在用量统计弹窗内执行在线更新并触发重载后，新版挂载时自动无缝复开用量弹窗（不再突然关闭让人误以为崩溃），并在标题栏下方展示绿色提示横幅「更新成功，插件已自动重载 · 当前版本 vX.Y.Z」（支持三语切换与「知道了」一键收起，更新前若已手动关窗则不误弹）。
+- **重绘正圆 SVG 上下文进度环**：将内联状态栏 `#context-ring` 从 CSS `conic-gradient + mask` 重构为 SVG 双圆环（`15px × 15px`、`overflow: visible`、`r="5.6"` / `stroke-width: 2.7`、`pathLength="100"`），彻底消除 12 点钟方向接缝撕裂缺口与四边视口裁切发平现象，同时精准维持原有直径与环宽。
+- **同会话无感快照接力与冷启动骨架**：重启/更新重载首帧通过 `window.__agPulseHandover` + `sessionStorage` 10 分钟 LRU 快照原地回显真实指标（瞬态断连保留上次有效值），仅在全无历史快照冷启动时展示 3 颗轻柔等高胶囊骨架。
+- **重绘无黑底透明轮廓 Logo**：[logo.svg](assets/logo.svg) 去掉暗色圆角方框，改用双层蓝紫叠卡视窗 + 白色 `tok/s` 脉冲波形 + 三色分段上下文占用条，适配 Plugins 列表浅色与深色背景。
 
 ---
 

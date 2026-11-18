@@ -32,6 +32,25 @@ module.exports = function installAgPulseInlineWidget() {
   let usageGuideDismissed=false;
   let hoveredCtxRow=null,baseCtxNoteKey='';
   const SNAP_KEY='ag-pulse-snap-v1',SNAP_TTL=10*60*1000;
+  const UPDATE_HANDOVER_KEY='ag-pulse-update-reload-v1',UPDATE_HANDOVER_TTL=2*60*1000;
+  let pendingUpdateReload=null,awaitingReloadConfirmVersion=undefined;
+  const takeUpdateReload=()=>{
+    let found=null;
+    try{
+      const h=window.__agPulseHandover;
+      if(h?.updateReload){found=h.updateReload;delete h.updateReload;}
+    }catch{}
+    try{
+      if(typeof sessionStorage!=='undefined'){
+        const raw=sessionStorage.getItem(UPDATE_HANDOVER_KEY);
+        if(raw){sessionStorage.removeItem(UPDATE_HANDOVER_KEY);if(!found)found=JSON.parse(raw);}
+      }
+    }catch{}
+    if(!found||typeof found!=='object'||!found.reopenModal)return null;
+    const now=Date.now();
+    if(!Number.isFinite(found.at)||now-found.at>UPDATE_HANDOVER_TTL||now<found.at-5000)return null;
+    return {reopenModal:true,toVersion:typeof found.toVersion==='string'&&found.toVersion?found.toVersion:null};
+  };
   const sanitizeSnap=value=>{
     if(!value||(!value.speed&&!value.usage))return null;
     return {connection:'stale',speed:value.speed||null,usage:value.usage||null,collection:value.collection||null,groups:value.groups||[]};
@@ -150,6 +169,7 @@ module.exports = function installAgPulseInlineWidget() {
     stopDensityMotion();densityFrame=null;densityProbe=null;
     manualRequest=null;refreshBusy(false);
     let restored=null;
+    pendingUpdateReload||=takeUpdateReload();
     try{
       const h=window.__agPulseHandover;
       if(h){
@@ -596,7 +616,10 @@ module.exports = function installAgPulseInlineWidget() {
       :host([data-layout=blocked]){visibility:hidden!important;pointer-events:none!important}:host(.native-no-room){flex:0 0 0px!important;width:0!important;max-width:0!important;margin:0!important}
       .density-stage{position:absolute;overflow:clip;pointer-events:none;user-select:none}.density-piece{pointer-events:none!important}
       .scope-note{margin:0 0 10px;color:var(--pulse-muted);font-size:11px}:host([data-scope=main]) .scope-note,:host([data-scope=ide]) .scope-note{display:none}
-      .context-ring{display:inline-block;flex:none;width:13px;height:13px;border-radius:50%;background:conic-gradient(var(--ctx-ring-color,var(--pulse-muted)) var(--used-angle,0deg),var(--pulse-ring-track) 0);mask:radial-gradient(circle,transparent 41%,#000 45%)}
+      .context-ring{display:inline-block;flex:none;width:15px;height:15px;overflow:visible}
+      .context-ring circle{fill:none;stroke-width:2.7;stroke-linecap:butt;shape-rendering:geometricPrecision}
+      .context-ring-track{stroke:var(--pulse-ring-track)}
+      .context-ring-fill{stroke:var(--ctx-ring-color,var(--pulse-value,var(--pulse-muted)));stroke-dasharray:var(--used-dash,0 100)}
       .collection-notice{margin:8px 0 10px;padding:9px 10px;border-left:2px solid var(--pulse-warning);background:var(--pulse-control);border-radius:6px;font-size:11px;line-height:1.55}.collection-notice[hidden]{display:none}.collection-notice p{margin:3px 0}.collection-notice summary{cursor:pointer;color:var(--pulse-label)}.collection-notice a{color:var(--pulse-emphasis);text-decoration:underline}.collection-notice strong{color:var(--pulse-warning)}:host(:not([data-collection=limited])) .collection-warning{display:none!important}.collection-warning,.collection-processing{display:none}.collection-label{display:none}:host([data-collection=limited]) [data-card=cache]{color:var(--pulse-warning)}:host([data-collection=limited]) [data-card=cache]>svg:first-child{display:none}:host([data-collection=limited]) [data-card=cache]>.collection-warning{display:block}:host([data-collection=limited]) [data-card=cache]>:not(svg){display:none}:host([data-collection=limited]) [data-card=cache]>.collection-label{display:inline}:host([data-collection=limited].icons-only) [data-card=cache]>.collection-label{display:none}:host([data-collection=processing]) .collection-notice{border-left-color:var(--pulse-emphasis)}:host([data-collection=processing]) .collection-notice strong,:host([data-collection=processing]) [data-card=cache]{color:var(--pulse-emphasis)}:host([data-collection=processing]) [data-card=cache]>svg:first-child,:host([data-collection=processing]) [data-card=cache]>:not(svg){display:none}:host([data-collection=processing]) [data-card=cache]>.collection-processing{display:block}:host([data-collection=processing]) [data-card=cache]>.collection-label{display:inline}:host([data-collection=processing].icons-only) [data-card=cache]>.collection-label{display:none}
       :host(:not([data-collection=processing])) .collection-processing{display:none!important}[data-card=cache]{position:relative}[data-card=cache][data-task-current-only=true]::after{content:'!';position:absolute;top:0;left:13px;z-index:1;width:9px;height:9px;border-radius:50%;background:var(--pulse-warning);color:var(--pulse-background);font-size:7px;font-weight:700;line-height:9px;text-align:center;pointer-events:none}
       #rate-note{white-space:pre-line}
@@ -610,7 +633,7 @@ module.exports = function installAgPulseInlineWidget() {
       <span class="skel-row" id="skel-row" aria-hidden="true" hidden><i class="skel-pill skel-s"></i><i class="skel-pill skel-m"></i><i class="skel-pill skel-xs"></i></span>
       <button class="chip" data-card="speed" data-i18n-aria="session" hidden aria-controls="speed-card" aria-expanded="false">${svg('speed')}<span class="rounds" id="rounds" hidden>0 轮 0 步</span><span class="sep" aria-hidden="true" hidden>·</span><span id="tps">0</span><span>tok/s</span></button>
       <button class="chip" data-card="cache" data-i18n-aria="cacheTitle" hidden aria-controls="cache-card" aria-expanded="false">${svg('cache')}<svg class="collection-warning" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 15 14H1ZM8 6v4m0 2v.1"/></svg><svg class="collection-processing" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5M8 1v3m3-2v3"/></svg><span class="collection-label"></span><span class="cache-total" id="cache-total">0 tok</span><span class="sep" aria-hidden="true">·</span><span data-i18n="cache">Cache hit</span><span id="cache-rate">0%</span></button>
-      <button class="chip" data-card="context" data-i18n-aria="context" hidden aria-controls="context-card" aria-expanded="false"><span class="context-ring" id="context-ring" aria-hidden="true"></span><span id="context-percent">0%</span></button>
+      <button class="chip" data-card="context" data-i18n-aria="context" hidden aria-controls="context-card" aria-expanded="false"><svg class="context-ring" id="context-ring" viewBox="0 0 16 16" aria-hidden="true"><circle class="context-ring-track" cx="8" cy="8" r="5.6"/><circle class="context-ring-fill" cx="8" cy="8" r="5.6" pathLength="100" transform="rotate(-90 8 8)"/></svg><span id="context-percent">0%</span></button>
     </div><section class="card" id="speed-card" role="region" data-i18n-aria="session" aria-label="Session statistics" hidden>
       <div class="heading"><span>${svg('speed')}<span data-i18n="session">Session statistics</span></span><span class="heading-value" id="samples">0 轮 0 步</span></div>
       <dl>${[['modelTimeShort','model-time'],['toolTime','tool-time'],['ttftLabel','ttft'],['tpsLabel','session-rate']].map(([key,id])=>`<div><dt data-i18n="${key}">${t(key)}</dt><dd id="${id}">—</dd></div>`).join('')}</dl><p class="footnote" id="rate-note" hidden></p>
@@ -675,6 +698,7 @@ module.exports = function installAgPulseInlineWidget() {
         .usage-open-main{display:inline-flex;align-items:center;gap:6px;min-width:0}.usage-update-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;flex:none}.usage-update-dot[hidden]{display:none}
       `;
       usageDashboard=window.__agPulseUsageFactory({root,language,setMarkup,hostLabel:surface?.usageHostLabel||'Antigravity',guideDismissed:usageGuideDismissed,onDismissGuide:async()=>{const saved=await window.agPulseHost.setPreferences({usageGuideDismissed:true});if(saved?.usageGuideDismissed!==true)throw Error('Usage guide could not be saved');syncGuide(saved);},onLanguage:next=>preferences.choose(next),onRefresh:()=>refreshManually('refresh'),onUpdate:typeof window.agPulseHost?.updatePlugin==='function'?input=>window.agPulseHost.updatePlugin(input):null});
+      pendingUpdateReload||=takeUpdateReload();
       $('open-usage').addEventListener('click',()=>{const trigger=root.querySelector('[data-card=cache]'),conversation=conversationId();hide();const cachedUsage=data?.usage?{...data.usage,syncing:false,syncMode:null,syncProgress:null}:data?.usage;usageDashboard.open(cachedUsage,trigger,data?.update);void window.agPulseHost.getMetrics({conversationId:conversation,force:true,usageCheck:true}).then(result=>{if(disposed)return;if(result?.usage){data=result;usageDashboard.update(result.usage,result.update);}const modalSync=Boolean(usageDashboard?.isOpen&&!document.hidden&&(result?.usage?.syncMode||(result?.usage?.syncing&&result?.usage?.summaryStale!==true)));if(modalSync&&!modalSyncTimer){modalSyncTimer=setTimeout(()=>{modalSyncTimer=null;if(!disposed&&usageDashboard?.isOpen&&!document.hidden)refresh();},250);modalSyncTimer.unref?.();}}).catch(()=>{});});
     }
     localize();
@@ -687,6 +711,27 @@ module.exports = function installAgPulseInlineWidget() {
       const available=Boolean(data.usage);hidden($('usage-entry'),!available);
       text('usage-today',compact(data.usage?.todayTokens,'0'));text('usage-month',compact(data.usage?.monthTokens,'0'));usageDashboard.update(data.usage,data?.update);
       if($('usage-update-dot'))$('usage-update-dot').hidden=data?.update?.state!=='available';
+      if(pendingUpdateReload?.reopenModal&&data.usage){
+        const handover=pendingUpdateReload;
+        pendingUpdateReload=null;
+        const trigger=root.querySelector('[data-card=cache]');
+        const cachedUsage={...data.usage,syncing:false,syncMode:null,syncProgress:null};
+        hide();
+        usageDashboard.open(cachedUsage,trigger,data?.update);
+        const liveUpdate=data?.update;
+        const settled=Boolean(liveUpdate&&!['installing','installed','reloading'].includes(liveUpdate.state));
+        usageDashboard.setUpdateNotice(settled
+          ?{state:'reloaded',version:liveUpdate.currentVersion||handover.toVersion}
+          :{state:'reloading',version:handover.toVersion});
+        awaitingReloadConfirmVersion=settled?undefined:handover.toVersion;
+      }else if(awaitingReloadConfirmVersion!==undefined){
+        const liveUpdate=data?.update;
+        if(liveUpdate&&!['installing','installed','reloading'].includes(liveUpdate.state)){
+          const version=liveUpdate.currentVersion||awaitingReloadConfirmVersion||null;
+          awaitingReloadConfirmVersion=undefined;
+          if(usageDashboard.isOpen)usageDashboard.setUpdateNotice({state:'reloaded',version});
+        }
+      }
     }
     const speed=data.speed,collection=data.collection;
     const taskUsage=Number.isSafeInteger(speed?.taskUsage?.subagents)&&speed.taskUsage.subagents>0?speed.taskUsage:null;
@@ -737,7 +782,8 @@ module.exports = function installAgPulseInlineWidget() {
     const hasUsedTokens=typeof context?.usedTokens==='number'&&Number.isFinite(context.usedTokens);
     hidden(root.querySelector('[data-card="context"]'),waitingInitial);
     text('context-percent',`${usedPct}%`);
-    style($('context-ring'),'--used-angle',`${usedFraction!==null?usedFraction*360:0}deg`);
+    const usedDash=usedFraction===null||usedFraction<=0?'0 100':usedFraction>=1?'none':`${(usedFraction*100).toFixed(2)} 100`;
+    style($('context-ring'),'--used-dash',usedDash);
     style($('context-ring'),'--ctx-ring-color',usedFraction>=.9?'var(--pulse-danger)':usedFraction>=.75?'var(--pulse-warning)':'var(--pulse-value,var(--pulse-muted))');
     text('context-summary-pct',`${usedPct}%`);
     if(context&&hasUsedTokens){
@@ -909,7 +955,16 @@ module.exports = function installAgPulseInlineWidget() {
   densityMedia.addEventListener('change',stopDensityMotion);
   const timerId=setInterval(()=>{mount();fit();position();if(conversationId()!==lastConversation||Date.now()-lastFetch>(document.hidden?10000:2200))refresh();},1000);
   window.__agPulseDispose=()=>{
-    if(data?.speed||data?.usage){try{window.__agPulseHandover={conversationId:lastConversation,data,at:Date.now()};}catch{}saveSessionSnap(lastConversation,data);}
+    const dashUpdate=usageDashboard?.getUpdateState?.();
+    const updState=dashUpdate?.state||data?.update?.state;
+    const isUpdatingReload=['installed','reloading'].includes(updState)||(updState==='installing'&&dashUpdate?.busy);
+    const updateReload=isUpdatingReload&&usageDashboard?.isOpen?{
+      reopenModal:true,
+      toVersion:dashUpdate?.currentVersion||dashUpdate?.latestVersion||data?.update?.currentVersion||data?.update?.latestVersion||null,
+      at:Date.now(),
+    }:null;
+    if(updateReload){try{if(typeof sessionStorage!=='undefined')sessionStorage.setItem(UPDATE_HANDOVER_KEY,JSON.stringify(updateReload));}catch{}}
+    if(data?.speed||data?.usage||updateReload){try{window.__agPulseHandover={conversationId:lastConversation,data,at:Date.now(),...(updateReload?{updateReload}:{})};}catch{}saveSessionSnap(lastConversation,data);}
     else{try{delete window.__agPulseHandover;}catch{}}
     disposed=true;requestEpoch++;pending=false;refreshRequest=null;stopDensityMotion();densityFrame=null;densityProbe=null;
     clearInterval(timerId);clearTimeout(modalSyncTimer);modalSyncTimer=null;clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();usageDashboard?.dispose();node?.remove();

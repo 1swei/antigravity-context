@@ -475,6 +475,7 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     assert.equal(createdIds.get('skel-row').hidden, true);
     // 1. Empty new conversation: 0% & 0 everywhere, never '—'
     assert.equal(createdIds.get('context-percent').textContent, '0%');
+    assert.equal(createdIds.get('context-ring').style.getPropertyValue('--used-dash'), '0 100');
     assert.equal(createdIds.get('context-summary-pct').textContent, '0%');
     assert.equal(createdIds.get('context-tokens').textContent, '0');
     assert.equal(createdIds.get('ctx-sys-val').textContent, '0');
@@ -527,6 +528,7 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     assert.equal(createdIds.get('cache-total').textContent, '3.2M tok');
     assert.equal(createdIds.get('cache-rate').textContent, '98%');
     assert.equal(createdIds.get('context-percent').textContent, '10%');
+    assert.equal(createdIds.get('context-ring').style.getPropertyValue('--used-dash'), '10.00 100');
     assert.equal(createdIds.get('context-tokens').textContent, '~105K / 1M');
     assert.equal(createdIds.get('ctx-sys-val').textContent, '~1.4K');
     assert.equal(createdIds.get('ctx-tools-val').textContent, '~7.4K');
@@ -610,6 +612,7 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     };
     await new Promise(r => setTimeout(r, 3200));
     assert.equal(createdIds.get('ctx-breakdown').hidden, false);
+    assert.equal(createdIds.get('context-ring').style.getPropertyValue('--used-dash'), '78.13 100');
     assert.equal(createdIds.get('ctx-sys-val').textContent, '20K');
     assert.equal(createdIds.get('ctx-ext-val').textContent, '30K');
     assert.equal(createdIds.get('ctx-tools-val').textContent, '100K');
@@ -1529,11 +1532,290 @@ test('usage-ui header update button shows red dot on available update and suppor
     assert.equal(idMap.get('upd-feedback').textContent, '新版本将在几秒内自动生效');
     assert.equal(idMap.get('upd-action').hidden, true);
     assert.equal(idMap.get('update-dot').hidden, true);
+    assert.deepEqual(dash.getUpdateState(), { state: 'reloading', currentVersion: '1.0.2', latestVersion: '1.0.2', progress: { phase: 'complete' }, busy: false });
+
+    dash.setUpdateNotice({ state: 'reloading', version: '1.0.2' });
+    assert.equal(idMap.get('update-notice').hidden, false);
+    assert.equal(idMap.get('update-notice').dataset.state, 'reloading');
+    assert.equal(idMap.get('update-notice-title').textContent, '正在完成插件重载…');
+    assert.equal(idMap.get('update-notice-detail').textContent, '正在激活 v1.0.2');
+
+    dash.setUpdateNotice({ state: 'reloaded', version: '1.0.2' });
+    assert.equal(idMap.get('update-notice').hidden, false);
+    assert.equal(idMap.get('update-notice').dataset.state, 'reloaded');
+    assert.equal(idMap.get('update-notice-title').textContent, '更新成功，插件已自动重载');
+    assert.equal(idMap.get('update-notice-detail').textContent, '当前版本 v1.0.2');
+
+    idMap.get('update-notice-close').dispatch('click');
+    assert.equal(idMap.get('update-notice').hidden, true);
+
+    dash.setUpdateNotice({ state: 'reloaded', version: '1.0.2' });
+    assert.equal(idMap.get('update-notice').hidden, false);
+    dash.close();
+    assert.equal(idMap.get('update-notice').hidden, true);
     dash.dispose();
   } finally {
     globalThis.document = prevDoc;
     globalThis.window = prevWin;
     globalThis.getComputedStyle = prevComputed;
     globalThis.MutationObserver = prevMO;
+  }
+});
+
+test('inline-widget reopens usage modal after update reload and shows reload-success notice', async () => {
+  const createUsageDashboard = require('../../../compat/usage-ui.cjs');
+  const createI18n = require('../../../compat/i18n.cjs');
+  const createTheme = require('../../../compat/theme.cjs');
+  const installInline = require('../../../compat/inline-widget.cjs');
+
+  let createdIds = new Map();
+  let doc = null;
+  const makeNode = tag => {
+    const attrs = new Map();
+    const listeners = new Map();
+    let _id = '';
+    const el = {
+      tagName: String(tag || 'div').toUpperCase(),
+      get id() { return _id; },
+      set id(v) { _id = String(v || ''); if (_id) createdIds.set(_id, el); },
+      hidden: false,
+      disabled: false,
+      open: false,
+      tabIndex: 0,
+      dataset: {},
+      className: '',
+      textContent: '',
+      innerHTML: '',
+      title: '',
+      isConnected: true,
+      children: [],
+      style: makeStyleStore(),
+      attributes: attrs,
+      firstElementChild: null,
+      get lastElementChild() { return el.children.at(-1) ?? null; },
+      get ownerDocument() { return doc; },
+      parentElement: null,
+      parentNode: null,
+      previousElementSibling: null,
+      nextSibling: null,
+      get clientWidth() { return 640; },
+      get scrollWidth() { return 240; },
+      classList: {
+        add(...cs) { for (const c of cs) if (!el.className.split(/\s+/).includes(c)) el.className = `${el.className} ${c}`.trim(); },
+        remove(...cs) { el.className = el.className.split(/\s+/).filter(x => x && !cs.includes(x)).join(' '); },
+        toggle(c, on) { if (on) el.classList.add(c); else el.classList.remove(c); },
+        contains(c) { return el.className.split(/\s+/).includes(c); },
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); if (k === 'id') el.id = String(v); },
+      getAttribute(k) { return attrs.get(k) ?? null; },
+      removeAttribute(k) { attrs.delete(k); },
+      hasAttribute(k) { return attrs.has(k); },
+      append(...nodes) {
+        for (const n of nodes) if (n && typeof n === 'object') { n.parentElement = el; n.parentNode = el; el.children.push(n); }
+        el.firstElementChild = el.children.find(c => c.tagName) ?? null;
+      },
+      after(...nodes) { el.parentElement?.append(...nodes); },
+      before() {},
+      insertBefore(n) { el.append(n); return n; },
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      remove() { el.isConnected = false; },
+      closest: () => null,
+      matches: sel => (sel === ':popover-open' ? el.open : false),
+      showPopover() { el.open = true; },
+      hidePopover() { el.open = false; },
+      focus() {},
+      animate: () => ({ cancel() {} }),
+      getClientRects: () => [{ width: 20, height: 20 }],
+      getBoundingClientRect: () => ({ left: 100, top: 300, right: 740, bottom: 328, width: 640, height: 28 }),
+      addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(fn); },
+      removeEventListener(type, fn) { listeners.get(type)?.delete(fn); },
+      dispatch(type, event = {}) { for (const fn of listeners.get(type) || []) fn({ stopPropagation() {}, preventDefault() {}, target: el, currentTarget: el, ...event }); },
+      querySelector(sel) { return el.querySelectorAll(sel)[0] ?? null; },
+      querySelectorAll(sel) {
+        const list = [];
+        const walk = n => { for (const c of n.children || []) { list.push(c); walk(c); } };
+        walk(el);
+        const parts = sel.split(',').map(p => p.trim());
+        return list.filter(n => parts.some(p => {
+          if (p.startsWith('.')) return String(n.className || '').split(/\s+/).includes(p.slice(1));
+          if (p.startsWith('#')) return n.id === p.slice(1);
+          const eq = p.match(/^\[([^=\]]+)=["']?([^"'\]]+)["']?\]$/);
+          if (eq) return (eq[1].startsWith('data-') ? n.dataset?.[eq[1].slice(5).replace(/-([a-z])/g, (_, x) => x.toUpperCase())] : n.attributes?.get(eq[1])) === eq[2];
+          const has = p.match(/^\[([^\]=]+)\]$/);
+          if (has) return n.attributes?.has(has[1]) || false;
+          return n.tagName === p.toUpperCase();
+        }));
+      },
+      attachShadow() {
+        const sr = makeNode('shadow');
+        sr.getElementById = id => createdIds.get(id) ?? null;
+        sr.host = el;
+        return sr;
+      },
+    };
+    return el;
+  };
+  const setMarkup = (target, markup) => {
+    target.innerHTML = markup;
+    target.children = [];
+    const stack = [target];
+    const voidTags = new Set(['path', 'circle', 'i', 'br']);
+    for (const m of markup.matchAll(/<\/?([a-z0-9-]+)\b([^>]*)>/gi)) {
+      const full = m[0], tag = m[1].toLowerCase(), rawAttrs = m[2];
+      if (full.startsWith('</')) { if (stack.length > 1) stack.pop(); continue; }
+      const n = makeNode(tag);
+      for (const am of rawAttrs.matchAll(/([a-z0-9-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/gi)) {
+        const k = am[1]; if (!k || k === '/') continue;
+        const v = am[2] ?? am[3] ?? am[4] ?? '';
+        n.setAttribute(k, v);
+        if (k === 'class') n.className = v;
+        else if (k === 'hidden') n.hidden = true;
+        else if (k.startsWith('data-')) n.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v;
+      }
+      stack[stack.length - 1].append(n);
+      if (!rawAttrs.trim().endsWith('/') && !voidTags.has(tag)) stack.push(n);
+    }
+  };
+  const sStorage = new Map();
+  let currentVersion = '1.0.7';
+  const prev = {
+    document: globalThis.document,
+    window: globalThis.window,
+    location: globalThis.location,
+    localStorage: globalThis.localStorage,
+    sessionStorage: globalThis.sessionStorage,
+    getComputedStyle: globalThis.getComputedStyle,
+    matchMedia: globalThis.matchMedia,
+    MutationObserver: globalThis.MutationObserver,
+    ResizeObserver: globalThis.ResizeObserver,
+    CSS: globalThis.CSS,
+    innerWidth: globalThis.innerWidth,
+    innerHeight: globalThis.innerHeight,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+  };
+  const rootEl = makeNode('html'), bodyEl = makeNode('body'), row = makeNode('div'), branch = makeNode('div'), editor = makeNode('div');
+  row.append(branch);
+  doc = {
+    readyState: 'complete',
+    documentElement: rootEl,
+    body: bodyEl,
+    head: makeNode('head'),
+    defaultView: { addEventListener() {}, removeEventListener() {}, innerWidth: 1200, innerHeight: 900 },
+    createElement: tag => tag === 'canvas' ? { width: 1, height: 1, getContext: () => makeCanvasContext() } : makeNode(tag),
+    createTextNode: text => ({ textContent: text }),
+    addEventListener() {},
+    removeEventListener() {},
+    querySelectorAll: () => [],
+  };
+  globalThis.document = doc;
+  globalThis.location = { pathname: '/c/11111111-1111-1111-1111-111111111111' };
+  globalThis.localStorage = { getItem: k => (k === 'ag-pulse-language' ? 'zh-CN' : null), setItem() {} };
+  globalThis.CSS = { supports: () => true };
+  globalThis.innerWidth = 1200;
+  globalThis.innerHeight = 900;
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.sessionStorage = {
+    getItem: k => (sStorage.has(k) ? sStorage.get(k) : null),
+    setItem: (k, v) => { sStorage.set(k, String(v)); },
+    removeItem: k => { sStorage.delete(k); },
+  };
+  globalThis.getComputedStyle = el => el === bodyEl
+    ? { fontFamily: '"Google Sans Flex", sans-serif', getPropertyValue: () => '' }
+    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: 'light', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+  globalThis.window = {
+    addEventListener() {},
+    removeEventListener() {},
+    matchMedia: globalThis.matchMedia,
+    innerWidth: 1200,
+    innerHeight: 900,
+    __agPulseI18nFactory: createI18n,
+    __agPulseThemeFactory: createTheme,
+    __agPulseUsageFactory: createUsageDashboard,
+    __agPulseSurface: {
+      useSharedComposer: false,
+      showEmpty: true,
+      findComposer: () => ({ editor, model: branch, row, branch, box: row, kind: 'main' }),
+      conversationId: () => '11111111-1111-1111-1111-111111111111',
+      nativeReserve: () => 0,
+      setMarkup,
+    },
+    agPulseHost: {
+      getPreferences: async () => ({ language: 'zh-CN', revision: 1, languageGuideDismissed: true, usageGuideDismissed: true }),
+      setPreferences: async p => ({ ...p, revision: 2 }),
+      getMetrics: async () => ({
+        connection: 'live',
+        preferences: { language: 'zh-CN', revision: 1, languageGuideDismissed: true, usageGuideDismissed: true },
+        speed: {
+          conversationId: '11111111-1111-1111-1111-111111111111',
+          rounds: 1, steps: 2, measuredRequests: 1, tps: 120, latestTps: 120, latestRateStatus: 'ok',
+          context: { usedTokens: 24000, maxTokens: 100000, usedFraction: 0.24, remainingFraction: 0.76, estimated: false },
+          cache: { hitRate: 0.9, totalTokens: 1000, cachedTokens: 900, uncachedTokens: 100, cacheWriteTokens: 0, outputTokens: 50, measuredRequests: 1 },
+          tokens: { totalTokens: 1000, cachedTokens: 900, uncachedTokens: 100, cacheWriteTokens: 0, outputTokens: 50, measuredRequests: 1 },
+        },
+        usage: { accountKey: 'acct', today: '2026-11-18', firstDate: '2026-11-18', timeZone: 'Asia/Shanghai', requests: 1, todayTokens: 1000, weekTokens: 1000, monthTokens: 1000, totalTokens: 1000, models: [], days: [] },
+        update: currentVersion === '1.0.7'
+          ? { state: 'available', currentVersion: '1.0.7', latestVersion: '1.0.8' }
+          : { state: 'current', currentVersion: '1.0.8', latestVersion: '1.0.8' },
+      }),
+      updatePlugin: async input => {
+        if (input.action === 'apply') return { state: 'reloading', currentVersion: '1.0.8', latestVersion: '1.0.8', progress: { phase: 'complete' } };
+        return { state: 'available', currentVersion: '1.0.7', latestVersion: '1.0.8' };
+      },
+      report() {},
+    },
+  };
+
+  try {
+    installInline();
+    await new Promise(r => setTimeout(r, 30));
+    createdIds.get('open-usage').dispatch('click');
+    await new Promise(r => setTimeout(r, 20));
+    assert.equal(createdIds.get('usage-dashboard').open, true);
+
+    createdIds.get('update-btn').dispatch('click');
+    await new Promise(r => setImmediate(r));
+    createdIds.get('upd-action').dispatch('click');
+    await new Promise(r => setImmediate(r));
+
+    // Sidecar shuts down and disposes old widget while modal is open
+    globalThis.window.__agPulseDispose();
+    assert.equal(globalThis.window.__agPulseHandover?.updateReload?.reopenModal, true);
+    assert.equal(globalThis.window.__agPulseHandover?.updateReload?.toVersion, '1.0.8');
+    assert.equal(sStorage.has('ag-pulse-update-reload-v1'), true);
+
+    // New sidecar boots at v1.0.8 and mounts new widget
+    currentVersion = '1.0.8';
+    createdIds = new Map();
+    installInline();
+    assert.equal(createdIds.get('usage-dashboard').open, true, 'usage modal should reopen immediately after update reload');
+    assert.equal(sStorage.has('ag-pulse-update-reload-v1'), false);
+    await new Promise(r => setTimeout(r, 30));
+    assert.equal(createdIds.get('usage-dashboard').open, true);
+    assert.equal(createdIds.get('version-tag').textContent, 'v1.0.8');
+    assert.equal(createdIds.get('update-notice').hidden, false);
+    assert.equal(createdIds.get('update-notice').dataset.state, 'reloaded');
+    assert.equal(createdIds.get('update-notice-title').textContent, '更新成功，插件已自动重载');
+    assert.equal(createdIds.get('update-notice-detail').textContent, '当前版本 v1.0.8');
+
+    // Negative case: closing modal before an unrelated reload must not auto-open modal
+    createdIds.get('close').dispatch('click');
+    assert.equal(createdIds.get('usage-dashboard').open, false);
+    globalThis.window.__agPulseDispose();
+    assert.equal(globalThis.window.__agPulseHandover?.updateReload, undefined);
+    createdIds = new Map();
+    installInline();
+    await new Promise(r => setTimeout(r, 20));
+    assert.equal(createdIds.get('usage-dashboard').open, false);
+  } finally {
+    globalThis.window?.__agPulseDispose?.();
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete globalThis[k];
+      else globalThis[k] = v;
+    }
   }
 });

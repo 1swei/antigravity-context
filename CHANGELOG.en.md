@@ -3,8 +3,17 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.7` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.8` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-18`
+
+---
+
+## v1.0.8 (`2026-11-18`)
+
+- **Preserve Usage Modal & Show Success Notice Across Update Reload**: When updating from inside the usage analytics modal, the newly loaded plugin automatically reopens the modal instead of letting it vanish mid-reload, displaying a dismissible top banner (**"Update complete — plugin reloaded automatically · Now running vX.Y.Z"** across `en` / `zh-CN` / `zh-TW`); if the modal was closed before reload, it stays closed.
+- **Crisp SVG Context Progress Ring**: Replaced the CSS `conic-gradient + mask` ring (`#context-ring`) with a dual-circle SVG gauge (`15px × 15px`, `overflow: visible`, `r="5.6"`, `stroke-width: 2.7`, `pathLength="100"`), eliminating both the 12 o'clock seam notch and rectangular viewport clipping while preserving the original outer diameter and stroke weight.
+- **Seamless Session Snapshot Handover & Cold-Start Skeleton**: Preserves real inline metrics across reloads via `window.__agPulseHandover` and a 10-minute `sessionStorage` LRU snapshot (keeping prior values on transient offline states, and showing a quiet 3-pill skeleton only on true snapshot-less cold starts).
+- **Frameless Transparent-Canvas Logo**: Redesigned [logo.svg](assets/logo.svg) without the dark square tile into layered blue/indigo window cards with a white `tok/s` pulse waveform and segmented context bar for crisp contrast on both Light and Dark themes.
 
 ---
 
