@@ -3,8 +3,17 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.6` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
-- **Updated**: `2026-11-16`
+- **Current Version**: `1.0.7` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Updated**: `2026-11-18`
+
+---
+
+## v1.0.7 (`2026-11-18`)
+
+- **Native Context Breakdown & Three-Tier Fallback**: Added read-only SQLite protobuf reader [context-breakdown.mjs](sidecars/panel/context-breakdown.mjs) to decode host `contextWindowMetadata.breakdown` into **Core prompt & tool defs**, **Rules, skills & MCP**, **Tool calls & results**, and **Chat & thinking** aligned cleanly to active window tokens, with compaction-pending detection and smooth fallback to transcript estimation or a solid usage bar when native breakdown is unavailable.
+- **Row Hover Highlighting & Popover Polish**: Hovering any breakdown row highlights the row pill, focuses the matching segment in the progress bar, and swaps the single-line bottom explanation in place without recalculating popover geometry (eliminating bottom-edge flicker); unified new and historical sessions to always show 4 rows, tightened bottom card spacing, and removed redundant `tok/s` calculation footnotes.
+- **Seamless Auto-Reload After Update**: Automatically enters `reloading` and falls back to `scheduleReload(800)` right after verified package commit, removing the redundant reload button and clearing the update notification dot immediately.
+- **Documentation & Real Light/Dark Screenshots**: Updated [README.md](README.md) and [README.en.md](README.en.md) with refreshed Light/Dark screenshots captured directly from rendered UI components.
 
 ---
 

@@ -6,6 +6,7 @@ import { AntigravityClient } from './client.mjs';
 import { quotaMetrics, trajectoryMetrics } from './metrics.mjs';
 import { SessionHistory, usableMetrics, reconcileMetrics, safeMetrics } from './history.mjs';
 import { TranscriptReader } from './transcript.mjs';
+import { ContextBreakdownReader } from './context-breakdown.mjs';
 import {DelegatedUsage} from './delegated-usage.mjs';
 import {safeTaskUsage} from './task-usage.mjs';
 import {delegatedIds} from './delegation.mjs';
@@ -13,8 +14,8 @@ import {delegatedIds} from './delegation.mjs';
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BACKGROUND_RECHECK_MS=5*60*1000, BACKGROUND_MANUAL_COOLDOWN_MS=10*1000;
 export class MetricsStore {
-  constructor(client = new AntigravityClient(), { history = new SessionHistory(), onTrajectory = null, onBackgroundResult = null, background = undefined, transcripts = new TranscriptReader(), owns=()=>true } = {}) {
-    this.client = client; this.history = history; this.onTrajectory=onTrajectory; this.onBackgroundResult=onBackgroundResult; this.transcripts=transcripts; this.owns=owns;
+  constructor(client = new AntigravityClient(), { history = new SessionHistory(), onTrajectory = null, onBackgroundResult = null, background = undefined, transcripts = new TranscriptReader(), contextBreakdowns = new ContextBreakdownReader(), owns=()=>true } = {}) {
+    this.client = client; this.history = history; this.onTrajectory=onTrajectory; this.onBackgroundResult=onBackgroundResult; this.transcripts=transcripts; this.contextBreakdowns=contextBreakdowns; this.owns=owns;
     this.background=background===undefined?(typeof client.streamTrajectoryPage==='function'&&history.directory?new BackgroundStatistics({directory:join(dirname(history.directory),'collection-jobs'),owns:()=>this.owned(),onComplete:(...args)=>this.acceptBackground(...args)}):null):background;
     if(this.background&&client.reader)client.reader.isBackgroundManaged=id=>this.sessions.get(id)?.backgroundOnly===true;
     this.delegated=new DelegatedUsage(client,{owns,
@@ -76,7 +77,7 @@ export class MetricsStore {
       if (!this.owned() || epoch !== this.epoch) throw new Error('后台已重新连接，请等待刷新');
       const email = user.userStatus?.email;
       const identity = email ? createHash('sha256').update(email).digest('hex') : null;
-      if (identity !== this.identity) { this.background?.reset();this.delegated.reset();this.transcripts?.reset(); this.client.resetTrajectories?.(); this.quota = null; this.quotaAt = 0; this.sessions.clear(); this.summaries = []; this.summariesAt = 0;this.clearUsagePersistenceErrors(); }
+      if (identity !== this.identity) { this.background?.reset();this.delegated.reset();this.transcripts?.reset(); this.contextBreakdowns?.reset?.(); this.client.resetTrajectories?.(); this.quota = null; this.quotaAt = 0; this.sessions.clear(); this.summaries = []; this.summariesAt = 0;this.clearUsagePersistenceErrors(); }
       this.identity = identity;
       const response = await this.client.call('RetrieveUserQuotaSummary',force?{forceRefresh:true}:{});
       if (!this.owned() || epoch !== this.epoch || identity !== this.identity) throw new Error('后台已重新连接，请等待刷新');
@@ -117,6 +118,12 @@ export class MetricsStore {
       try{await this.onBackgroundResult(scope,id,database,{isCurrent:current});if(current()){this.setUsagePersistenceError('background:'+id,false);entry.backgroundUsageComplete=true;}}
       catch(error){if(current()){this.setUsagePersistenceError('background:'+id,true);entry.backgroundUsageComplete=false;throw error;}return;}
     }
+    try {
+      if(this.contextBreakdowns){
+        const bd=await this.contextBreakdowns.read(id);
+        if(bd&&current())fresh.contextBreakdown=bd;
+      }
+    } catch {}
     if(!current())return;
     entry.data={...reconcileMetrics(entry.data,fresh,entry.savedAt||null),...(previousTask?{previousTaskUsage:previousTask}:{}),conversationId:id};entry.collection=null;entry.backgroundRevision=revision;entry.backgroundCheckedAt=Date.now();entry.backgroundCompletedAt=Date.now();entry.backgroundReady=true;entry.updatedAt=Date.now();entry.lastSuccessAt=new Date().toISOString();
     try{const saved=await this.history.save(scope,id,entry.data,{isCurrent:current});if(saved&&current())entry.savedAt=saved.savedAt;}catch{if(current())this.persistenceError='统计暂时无法保存到本地';}
@@ -165,6 +172,13 @@ export class MetricsStore {
       if (!current()) throw new Error('后台已重新连接，请等待刷新');
       entry.collection=null;entry.lastSuccessAt=new Date().toISOString();
       const fresh = trajectoryMetrics(raw);
+      try {
+        if(this.contextBreakdowns){
+          const bd=await this.contextBreakdowns.read(id);
+          if(bd)fresh.contextBreakdown=bd;
+        }
+      } catch {}
+      if (!current()) throw new Error('后台已重新连接，请等待刷新');
       fresh.delegatedConversations=[...new Set([...delegatedIds(id,raw,this.client.reader?.summaries||{}),...(entry.data?.delegatedConversations||[])])].slice(0,128);
       fresh.taskUsage=this.delegated.request(scope,id,raw,{saved:entry.data?.taskUsage,knownIds:fresh.delegatedConversations,force,isCurrent:current});
       // Optional background I/O cannot delay or fail the core metrics request.
@@ -192,7 +206,7 @@ export class MetricsStore {
       const server = await this.client.discover();
       if (!this.owned()) throw new Error('后台已重新连接，请等待刷新');
       if (server.pid !== this.serverPid) {
-        this.epoch++; this.background?.reset();this.delegated.reset();this.transcripts?.reset(); this.quota = null; this.quotaAt = 0; this.sessions.clear(); this.identity = null; this.summaries = []; this.summariesAt = 0; this.serverPid = server.pid;this.clearUsagePersistenceErrors();
+        this.epoch++; this.background?.reset();this.delegated.reset();this.transcripts?.reset(); this.contextBreakdowns?.reset?.(); this.quota = null; this.quotaAt = 0; this.sessions.clear(); this.identity = null; this.summaries = []; this.summariesAt = 0; this.serverPid = server.pid;this.clearUsagePersistenceErrors();
       }
       try { await this.refreshQuota(force); }
       catch (e) { connection = this.quota ? 'stale' : 'offline'; error = e.message; }
@@ -228,5 +242,5 @@ export class MetricsStore {
       source: 'Antigravity local API',
     };
   }
-  dispose(){this.disposed=true;this.background?.dispose();this.delegated.dispose();this.transcripts?.reset();this.epoch++;}
+  dispose(){this.disposed=true;this.background?.dispose();this.delegated.dispose();this.transcripts?.reset();this.contextBreakdowns?.reset?.();this.epoch++;}
 }

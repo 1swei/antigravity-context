@@ -98,3 +98,19 @@ export function safeContext(value){
  // arbitrary source URLs, unsupported limits or additional saved properties.
  return contextMetrics({estimatedTokensUsed:value.usedTokens,maxContextTokens:value.maxTokens},{model:value.model,sampledAt:value.sampledAt,estimated:typeof value.estimated==='boolean'?value.estimated:undefined});
 }
+export function safeContextBreakdown(value){
+ if(!value||typeof value!=='object'||Array.isArray(value))return null;
+ if(value.version!==undefined&&value.version!==1)return null;
+ if(value.source==='compaction-pending'){
+  return {version:1,source:'compaction-pending',compactedPending:true,systemTokens:0,extensionsTokens:0,toolsTokens:0,messagesTokens:0,totalTokens:0};
+ }
+ if(value.source!=='host-breakdown')return null;
+ const systemTokens=count(value.systemTokens);
+ const extensionsTokens=count(value.extensionsTokens);
+ const toolsTokens=count(value.toolsTokens);
+ const messagesTokens=count(value.messagesTokens);
+ if(systemTokens===null||extensionsTokens===null||toolsTokens===null||messagesTokens===null)return null;
+ const totalTokens=systemTokens+extensionsTokens+toolsTokens+messagesTokens;
+ if(!Number.isSafeInteger(totalTokens)||totalTokens<=0)return null;
+ return {version:1,source:'host-breakdown',compactedPending:false,systemTokens,extensionsTokens,toolsTokens,messagesTokens,totalTokens};
+}

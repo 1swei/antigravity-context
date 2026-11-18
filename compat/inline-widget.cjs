@@ -30,6 +30,7 @@ module.exports = function installAgPulseInlineWidget() {
   const densityMedia=matchMedia('(prefers-reduced-motion: reduce)');
   const densityEase='cubic-bezier(0.32,0.72,0,1)';
   let usageGuideDismissed=false;
+  let hoveredCtxRow=null,baseCtxNoteKey='';
   function syncGuide(value){if(value?.usageGuideDismissed===true){usageGuideDismissed=true;usageDashboard?.syncGuideDismissed();}}
   const preferences=language.connectPreferences({
     read:async()=>{const value=await window.agPulseHost.getPreferences();syncGuide(value);return value;},
@@ -132,6 +133,7 @@ module.exports = function installAgPulseInlineWidget() {
     const zh=language.language==='zh-CN',tw=language.language==='zh-TW';
     text('usage-today-label',tw?'今日用量':(zh?'今日用量':'Today'));text('usage-month-label',tw?'本月用量':(zh?'本月用量':'This month'));
     text('usage-open-label',tw?'檢視用量統計':(zh?'查看用量统计':'View usage stats'));
+    syncContextNote();
   }
   function stopDensityMotion(){
     const motion=densityMotion;densityMotion=null;
@@ -361,12 +363,20 @@ module.exports = function installAgPulseInlineWidget() {
     if(visible){hidden(element,false);if(element.hasAttribute('popover')&&!element.matches(':popover-open'))element.showPopover();}
     else {if(element.hasAttribute('popover')&&element.matches(':popover-open'))element.hidePopover();hidden(element,true);}
   }
+  function syncContextNote(){
+    if(!root)return;
+    const card=$('context-card');
+    const key=hoveredCtxRow?.key||baseCtxNoteKey;
+    const note=key?t(key):'';
+    if(card)attribute(card,'data-hover-seg',hoveredCtxRow?.seg||null);
+    text('context-note',note);hidden($('context-note'),!note);
+  }
   function hide({keepWarm=false}={}){
     clearTimeout(openTimer);openTimer=null;
     clearTimeout(hoverTimer);hoverTimer=null;
     if(!keepWarm)warmUntil=0;
     changingCards=true;
-    try{cardName=null;for(const e of root?.querySelectorAll('[data-card]')||[])e.setAttribute('aria-expanded','false');for(const e of root?.querySelectorAll('.card')||[])cardVisibility(e,false);}
+    try{cardName=null;hoveredCtxRow=null;syncContextNote();for(const e of root?.querySelectorAll('[data-card]')||[])e.setAttribute('aria-expanded','false');for(const e of root?.querySelectorAll('.card')||[])cardVisibility(e,false);}
     finally{changingCards=false;}
   }
   function show(name){
@@ -539,8 +549,10 @@ module.exports = function installAgPulseInlineWidget() {
       .footnote{font-size:11px;color:var(--pulse-subtle);line-height:1.55;margin:10px 0 0}.footnote[hidden]{display:none}
       .track{height:6px;border-radius:999px;background:var(--pulse-track);margin:10px 0 12px;overflow:hidden;display:flex;gap:1px}
       .ctx-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.ctx-title{font-size:13px;color:var(--pulse-muted)}.ctx-title strong{color:var(--pulse-foreground);font-weight:600;margin-left:2px}
-      .ctx-seg{display:block;height:100%;width:0;min-width:0;flex:none;transition:width 160ms ease}.seg-sys{background:#9ca3af}.seg-tools{background:#a855f7}.seg-msg{background:#3b82f6}.seg-other{background:var(--pulse-accent,#3b82f6)}.seg-other.is-overhead,.dot-other{background-color:color-mix(in srgb,var(--pulse-muted) 34%,transparent);background-image:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--pulse-muted) 32%,transparent) 0 2.5px,transparent 2.5px 5px)}
-      .ctx-breakdown{margin:0}.ctx-breakdown>div{margin:8px 0}.ctx-breakdown dt{display:flex;align-items:center}.ctx-dot{display:inline-block;width:9px;height:9px;border-radius:2.5px;flex:none;margin-right:8px}.dot-sys{background:#9ca3af}.dot-tools{background:#a855f7}.dot-msg{background:#3b82f6}
+      .ctx-seg{display:block;height:100%;width:0;min-width:0;flex:none;transition:width 160ms ease,opacity 140ms ease}.seg-sys{background:#9ca3af}.seg-ext{background:#14b8a6}.seg-tools{background:#a855f7}.seg-msg{background:#3b82f6}.seg-other{background:var(--pulse-accent,#3b82f6)}.seg-other.is-overhead,.dot-other{background-color:color-mix(in srgb,var(--pulse-muted) 34%,transparent);background-image:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--pulse-muted) 32%,transparent) 0 2.5px,transparent 2.5px 5px)}
+      .context-card[data-hover-seg] .ctx-seg{opacity:.36}.context-card[data-hover-seg="sys"] .seg-sys,.context-card[data-hover-seg="ext"] .seg-ext,.context-card[data-hover-seg="tools"] .seg-tools,.context-card[data-hover-seg="msg"] .seg-msg,.context-card[data-hover-seg="other"] .seg-other{opacity:1}
+      .ctx-breakdown{margin:0}.ctx-breakdown[hidden]{display:none}.ctx-breakdown>div{margin:1px -7px;padding:4px 7px;border-radius:6px;cursor:default;transition:background-color 120ms ease}.ctx-breakdown>div:hover{background:var(--pulse-hover)}.ctx-breakdown>div:hover dt{color:var(--pulse-foreground)}.ctx-breakdown dt{display:flex;align-items:center;transition:color 120ms ease}.ctx-dot{display:inline-block;width:9px;height:9px;border-radius:2.5px;flex:none;margin-right:8px}.dot-sys{background:#9ca3af}.dot-ext{background:#14b8a6}.dot-tools{background:#a855f7}.dot-msg{background:#3b82f6}
+      .context-card{padding-bottom:12px}.context-card .footnote{margin-top:8px;padding-top:8px;border-top:1px solid var(--pulse-separator);min-height:25px;transition:color 120ms ease}.context-card[data-hover-seg] .footnote{color:var(--pulse-muted)}
       :host([data-layout=blocked]){visibility:hidden!important;pointer-events:none!important}:host(.native-no-room){flex:0 0 0px!important;width:0!important;max-width:0!important;margin:0!important}
       .density-stage{position:absolute;overflow:clip;pointer-events:none;user-select:none}.density-piece{pointer-events:none!important}
       .scope-note{margin:0 0 10px;color:var(--pulse-muted);font-size:11px}:host([data-scope=main]) .scope-note,:host([data-scope=ide]) .scope-note{display:none}
@@ -565,13 +577,15 @@ module.exports = function installAgPulseInlineWidget() {
       <dl>${[['cacheRate','cache-detail-rate'],['cacheMiss','cache-miss'],['cacheRead','cache-read'],['cacheOutput','cache-output'],['cacheWrite','cache-write']].map(([key,id])=>`<div ${id==='cache-write'?'id="cache-write-row" hidden':''}><dt data-i18n="${key}">${t(key)}</dt><dd id="${id}">0 tok</dd></div>`).join('')}<div id="task-own-row" hidden><dt data-i18n="taskOwn">${t('taskOwn')}</dt><dd id="task-own">—</dd></div><div id="task-subagents-row" hidden><dt id="task-subagents-label"></dt><dd id="task-subagents">—</dd></div></dl><p class="footnote" id="cache-note" hidden></p>
     </section><section class="card context-card" id="context-card" role="region" data-i18n-aria="context" hidden>
       <div class="ctx-head"><span class="ctx-title"><span data-i18n="contextUsedLabel">${t('contextUsedLabel')}</span> <strong id="context-summary-pct">0%</strong></span><strong class="heading-value" id="context-tokens">0</strong></div>
-      <div class="track ctx-progress" role="progressbar" data-i18n-aria="context" id="context-track"><i class="ctx-seg seg-sys" id="ctx-seg-sys"></i><i class="ctx-seg seg-tools" id="ctx-seg-tools"></i><i class="ctx-seg seg-msg" id="ctx-seg-msg"></i><i class="ctx-seg seg-other" id="ctx-seg-other"></i></div>
-      <dl class="ctx-breakdown">
-        <div><dt><i class="ctx-dot dot-sys" aria-hidden="true"></i><span data-i18n="breakdownSystem">${t('breakdownSystem')}</span></dt><dd id="ctx-sys-val">0</dd></div>
-        <div><dt><i class="ctx-dot dot-tools" aria-hidden="true"></i><span data-i18n="breakdownTools">${t('breakdownTools')}</span></dt><dd id="ctx-tools-val">0</dd></div>
-        <div><dt><i class="ctx-dot dot-msg" aria-hidden="true"></i><span data-i18n="breakdownMessages">${t('breakdownMessages')}</span></dt><dd id="ctx-msg-val">0</dd></div>
-        <div id="ctx-other-row" hidden><dt><i class="ctx-dot dot-other" aria-hidden="true"></i><span data-i18n="breakdownOther">${t('breakdownOther')}</span></dt><dd id="ctx-other-val">0</dd></div>
+      <div class="track ctx-progress" role="progressbar" data-i18n-aria="context" id="context-track"><i class="ctx-seg seg-sys" id="ctx-seg-sys"></i><i class="ctx-seg seg-ext" id="ctx-seg-ext"></i><i class="ctx-seg seg-tools" id="ctx-seg-tools"></i><i class="ctx-seg seg-msg" id="ctx-seg-msg"></i><i class="ctx-seg seg-other" id="ctx-seg-other"></i></div>
+      <dl class="ctx-breakdown" id="ctx-breakdown">
+        <div id="ctx-sys-row" data-seg="sys" data-desc-key="breakdownSystemDesc"><dt><i class="ctx-dot dot-sys" aria-hidden="true"></i><span data-i18n="breakdownSystem">${t('breakdownSystem')}</span></dt><dd id="ctx-sys-val">0</dd></div>
+        <div id="ctx-ext-row" data-seg="ext" data-desc-key="breakdownExtensionsDesc" hidden><dt><i class="ctx-dot dot-ext" aria-hidden="true"></i><span data-i18n="breakdownExtensions">${t('breakdownExtensions')}</span></dt><dd id="ctx-ext-val">0</dd></div>
+        <div id="ctx-tools-row" data-seg="tools" data-desc-key="breakdownToolsDesc"><dt><i class="ctx-dot dot-tools" aria-hidden="true"></i><span data-i18n="breakdownTools">${t('breakdownTools')}</span></dt><dd id="ctx-tools-val">0</dd></div>
+        <div id="ctx-msg-row" data-seg="msg" data-desc-key="breakdownMessagesDesc"><dt><i class="ctx-dot dot-msg" aria-hidden="true"></i><span data-i18n="breakdownMessages">${t('breakdownMessages')}</span></dt><dd id="ctx-msg-val">0</dd></div>
+        <div id="ctx-other-row" data-seg="other" data-desc-key="breakdownOtherDesc" hidden><dt><i class="ctx-dot dot-other" aria-hidden="true"></i><span data-i18n="breakdownOther">${t('breakdownOther')}</span></dt><dd id="ctx-other-val">0</dd></div>
       </dl>
+      <p class="footnote" id="context-note" hidden></p>
     </section>`);
     row.insertBefore(node,branch.nextSibling);
     for(const card of root.querySelectorAll('.card')){const anchor=card.querySelector('.heading,.ctx-head');const note=document.createElement('p');note.className='scope-note';note.dataset.i18n='subagentStats';if(anchor)anchor.after(note);}
@@ -592,6 +606,14 @@ module.exports = function installAgPulseInlineWidget() {
     }
     for(const card of root.querySelectorAll('.card')){
       card.addEventListener('pointerenter',()=>clearTimeout(hoverTimer));card.addEventListener('pointerleave',scheduleHide);
+    }
+    const breakdownList=$('ctx-breakdown');
+    if(breakdownList){
+      for(const rowEl of ['ctx-sys-row','ctx-ext-row','ctx-tools-row','ctx-msg-row','ctx-other-row'].map(id=>$(id)).filter(Boolean)){
+        rowEl.addEventListener('pointerenter',()=>{hoveredCtxRow={seg:rowEl.dataset.seg,key:rowEl.dataset.descKey};syncContextNote();});
+        rowEl.addEventListener('pointerleave',()=>{if(hoveredCtxRow?.seg===rowEl.dataset.seg){hoveredCtxRow=null;syncContextNote();}});
+      }
+      breakdownList.addEventListener('pointerleave',()=>{if(hoveredCtxRow){hoveredCtxRow=null;syncContextNote();}});
     }
     // A host composer may focus its editor on bubbled clicks. Keep plugin
     // controls' mouse actions inside the shadow root while retaining their
@@ -681,32 +703,75 @@ module.exports = function installAgPulseInlineWidget() {
     }else{
       text('context-tokens',context?.maxTokens!==null&&Number.isFinite(context?.maxTokens)?`0 / ${compact(context.maxTokens,'0')}`:'0');
     }
+    const cb=speed?.contextBreakdown;
+    const hasHostBreakdown=Boolean(cb?.source==='host-breakdown'&&cb.totalTokens>0);
     const ts=speed?.transcriptStats;
     const rawSys=ts?.activeSystemTokens??ts?.systemTokens??0;
     const rawTool=ts?.activeToolTokens??ts?.toolTokens??0;
     const rawMsg=(ts?.activeUserTokens??ts?.userTokens??0)+(ts?.activeAssistantTokens??ts?.assistantTokens??0);
     const rawSum=rawSys+rawTool+rawMsg;
-    const hasBreakdown=Boolean(ts&&rawSum>0);
-    const cap=hasUsedTokens&&context.usedTokens>0&&rawSum>context.usedTokens?context.usedTokens/rawSum:1;
-    const sysTok=hasBreakdown?Math.round(rawSys*cap):0;
-    const toolTok=hasBreakdown?Math.round(rawTool*cap):0;
-    const msgTok=hasBreakdown?Math.round(rawMsg*cap):0;
-    const otherTok=hasBreakdown&&hasUsedTokens?Math.max(0,context.usedTokens-(sysTok+toolTok+msgTok)):0;
-    text('ctx-sys-val',sysTok>0?`~${compact(sysTok,'0')}`:'0');
-    text('ctx-tools-val',toolTok>0?`~${compact(toolTok,'0')}`:'0');
-    text('ctx-msg-val',msgTok>0?`~${compact(msgTok,'0')}`:'0');
+    const hasTranscriptBreakdown=Boolean(ts&&rawSum>0);
+    const hasBreakdown=hasHostBreakdown||hasTranscriptBreakdown;
+    const barDenomBase=hasUsedTokens&&context.usedTokens>0?context.usedTokens:0;
+    let sysTok=0,extTok=0,toolTok=0,msgTok=0,otherTok=0,ctxNoteKey='';
+    if(hasHostBreakdown){
+      const scale=barDenomBase>0?barDenomBase/cb.totalTokens:1;
+      sysTok=Math.round(cb.systemTokens*scale);
+      extTok=Math.round(cb.extensionsTokens*scale);
+      toolTok=Math.round(cb.toolsTokens*scale);
+      msgTok=Math.round(cb.messagesTokens*scale);
+      if(barDenomBase>0){
+        const diff=barDenomBase-(sysTok+extTok+toolTok+msgTok);
+        if(diff!==0){
+          const buckets=[['sys',sysTok],['ext',extTok],['tools',toolTok],['msg',msgTok]].sort((a,b)=>b[1]-a[1]);
+          const top=buckets[0][0];
+          if(top==='sys')sysTok=Math.max(0,sysTok+diff);
+          else if(top==='ext')extTok=Math.max(0,extTok+diff);
+          else if(top==='tools')toolTok=Math.max(0,toolTok+diff);
+          else msgTok=Math.max(0,msgTok+diff);
+        }
+      }
+      ctxNoteKey='contextBreakdownHint';
+    }else if(hasTranscriptBreakdown){
+      const cap=barDenomBase>0&&rawSum>barDenomBase?barDenomBase/rawSum:1;
+      sysTok=Math.round(rawSys*cap);
+      toolTok=Math.round(rawTool*cap);
+      msgTok=Math.round(rawMsg*cap);
+      otherTok=hasUsedTokens?Math.max(0,context.usedTokens-(sysTok+toolTok+msgTok)):0;
+      ctxNoteKey=cb?.compactedPending?'contextBreakdownCompacted':'contextBreakdownFallback';
+    }else if(hasUsedTokens&&context.usedTokens>0){
+      const running=/RUNNING/i.test(String(speed?.status||''));
+      ctxNoteKey=cb?.compactedPending?'contextBreakdownCompacted'
+        :(ts?.status==='loading'||running)?'contextBreakdownPending'
+        :'contextBreakdownUnavailable';
+    }
+    const showRows=hasBreakdown||!hasUsedTokens||context.usedTokens===0;
+    if(showRows&&!ctxNoteKey)ctxNoteKey='contextBreakdownHint';
+    baseCtxNoteKey=ctxNoteKey;
+    const fmtSeg=n=>n>0?(hasHostBreakdown?compact(n,'0'):`~${compact(n,'0')}`):'0';
+    hidden($('ctx-breakdown'),!showRows);
+    text('ctx-sys-val',fmtSeg(sysTok));
+    text('ctx-ext-val',fmtSeg(extTok));
+    text('ctx-tools-val',fmtSeg(toolTok));
+    text('ctx-msg-val',fmtSeg(msgTok));
     text('ctx-other-val',otherTok>0?`~${compact(otherTok,'0')}`:'0');
-    hidden($('ctx-other-row'),!(hasBreakdown&&otherTok>0));
-    const barDenom=context?.maxTokens>0?context.maxTokens:(sysTok+toolTok+msgTok+otherTok);
+    const showTranscriptMode=!hasHostBreakdown&&hasTranscriptBreakdown;
+    hidden($('ctx-ext-row'),showTranscriptMode);
+    hidden($('ctx-other-row'),!(showTranscriptMode&&otherTok>0));
+    if(!showRows)hoveredCtxRow=null;
+    syncContextNote();
+    const barDenom=context?.maxTokens>0?context.maxTokens:(sysTok+extTok+toolTok+msgTok+otherTok);
     const segPct=n=>barDenom>0&&n>0?`${Math.min(100,(n/barDenom)*100).toFixed(2)}%`:'0%';
-    $('ctx-seg-other').classList?.toggle?.('is-overhead',hasBreakdown);
+    $('ctx-seg-other').classList?.toggle?.('is-overhead',showTranscriptMode);
     if(hasBreakdown&&barDenom>0){
       style($('ctx-seg-sys'),'width',segPct(sysTok));
+      style($('ctx-seg-ext'),'width',segPct(extTok));
       style($('ctx-seg-tools'),'width',segPct(toolTok));
       style($('ctx-seg-msg'),'width',segPct(msgTok));
       style($('ctx-seg-other'),'width',segPct(otherTok));
     }else{
       style($('ctx-seg-sys'),'width','0%');
+      style($('ctx-seg-ext'),'width','0%');
       style($('ctx-seg-tools'),'width','0%');
       style($('ctx-seg-msg'),'width','0%');
       style($('ctx-seg-other'),'width',usedFraction!==null&&usedFraction>0?`${Math.min(100,usedFraction*100).toFixed(2)}%`:'0%');
@@ -722,7 +787,7 @@ module.exports = function installAgPulseInlineWidget() {
     text('session-rate',speed?.latestRateStatus==='legacy'?t('ratePending'):speed?.latestRateStatus==='unreliable'?t('timingUnreliable'):`${rate(speed?.tps,'0')} tok/s`);
     const savedNote=!collectionActive&&speed?.restoredFromHistory?t('savedStats',{time:speed.savedAt?language.resetDate(speed.savedAt):'—'}):'';
     const saveWarning=data.persistenceError?t('saveFailed'):'';
-    const rateWarn=speed?.latestRateStatus==='unreliable'||speed?.latestRateStatus==='legacy'?language.rateNote(speed):'';
+    const rateWarn=speed?.latestRateStatus==='legacy'?language.rateNote(speed):'';
     const errText=language.errorMessage(data.error||(collectionActive?null:data.sessionError));
     const speedFooter=[errText,rateWarn,savedNote,saveWarning].filter(Boolean).join(' ');
     text('rate-note',speedFooter);hidden($('rate-note'),!speedFooter);

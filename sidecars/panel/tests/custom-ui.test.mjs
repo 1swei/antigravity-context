@@ -220,9 +220,12 @@ test('inline-widget source validates cleanly and contains zero update menu, quot
   const lang = createI18n('zh-CN');
   assert.equal(lang.t('roundsCompact', { rounds: 2, steps: 44 }), '2 轮 44 步');
   assert.equal(lang.t('contextUsedLabel'), '上下文已用');
-  assert.equal(lang.t('breakdownSystem'), '系统提示词');
-  assert.equal(lang.t('breakdownTools'), '工具调用');
-  assert.equal(lang.t('breakdownMessages'), '对话消息');
+  assert.equal(lang.t('breakdownSystem'), '内置指令与工具集');
+  assert.equal(lang.t('breakdownExtensions'), '规则、技能与 MCP');
+  assert.equal(lang.t('breakdownTools'), '工具调用结果');
+  assert.equal(lang.t('breakdownMessages'), '对话与思考');
+  assert.equal(lang.t('breakdownOther'), '内置提示与未统计');
+  assert.equal(lang.t('contextBreakdownHint'), '悬停分组查看具体说明。');
 });
 
 test('inline-widget executes mount + render for empty new session (0/0%) and active transcript breakdown + usage modal', async () => {
@@ -275,6 +278,7 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
   };
   const makeNode = (tag, ownerDoc) => {
     const attrs = new Map();
+    const listeners = new Map();
     let _id = '';
     const el = {
       tagName: String(tag || 'div').toUpperCase(),
@@ -316,8 +320,9 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
       matches: () => false,
       getClientRects: () => [{ width: 20, height: 20 }],
       getBoundingClientRect: () => ({ left: 100, top: 300, right: 600, bottom: 328, width: 500, height: 28 }),
-      addEventListener() {},
-      removeEventListener() {},
+      addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(fn); },
+      removeEventListener(type, fn) { listeners.get(type)?.delete(fn); },
+      dispatch(type, event = {}) { for (const fn of listeners.get(type) || []) fn({ stopPropagation() {}, preventDefault() {}, target: el, currentTarget: el, ...event }); },
       focus() {},
       scrollIntoView() {},
       animate: () => ({ cancel() {} }),
@@ -464,10 +469,19 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     assert.equal(createdIds.get('context-summary-pct').textContent, '0%');
     assert.equal(createdIds.get('context-tokens').textContent, '0');
     assert.equal(createdIds.get('ctx-sys-val').textContent, '0');
+    assert.equal(createdIds.get('ctx-ext-val').textContent, '0');
+    assert.equal(createdIds.get('ctx-ext-row').hidden, false);
     assert.equal(createdIds.get('ctx-tools-val').textContent, '0');
     assert.equal(createdIds.get('ctx-msg-val').textContent, '0');
     assert.equal(createdIds.get('ctx-other-val').textContent, '0');
     assert.equal(createdIds.get('ctx-other-row').hidden, true);
+    assert.equal(createdIds.get('context-note').hidden, false);
+    assert.equal(createdIds.get('context-note').textContent, '悬停分组查看具体说明。');
+    assert.equal(createdIds.get('rate-note').hidden, true);
+    createdIds.get('ctx-msg-row').dispatch('pointerenter');
+    assert.equal(createdIds.get('context-note').textContent, '你的提问、模型回复与内部思考内容。');
+    createdIds.get('ctx-msg-row').dispatch('pointerleave');
+    assert.equal(createdIds.get('context-note').textContent, '悬停分组查看具体说明。');
     const speedChip = createdIds.get('rounds').parentElement;
     const cacheChip = createdIds.get('cache-rate').parentElement;
     assert.equal(speedChip.hidden, false);
@@ -517,6 +531,7 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     assert.equal(createdIds.get('model-time').textContent, '3分26秒');
     assert.equal(createdIds.get('tool-time').textContent, '2分55秒');
     assert.equal(createdIds.get('ttft').textContent, '0.9秒');
+    assert.equal(createdIds.get('rate-note').hidden, true);
     assert.equal(createdIds.has('card-language-en'), false);
     assert.equal(createdIds.has('language-guide'), false);
 
@@ -562,6 +577,73 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
     assert.equal(createdIds.get('ctx-sys-val').textContent, '~5K');
     assert.equal(createdIds.get('ctx-tools-val').textContent, '~40K');
     assert.equal(createdIds.get('ctx-msg-val').textContent, '~5K');
+    assert.equal(createdIds.get('ctx-ext-row').hidden, true);
+    assert.equal(createdIds.get('context-note').hidden, false);
+    assert.equal(createdIds.get('context-note').textContent, '精确构成暂不可用，当前分段基于本地日志估算。');
+
+    // 5. Tier 1: exact host contextBreakdown hides other-row & fallback footnote, shows extensions cleanly
+    hostMetrics = {
+      ...hostMetrics,
+      speed: {
+        ...hostMetrics.speed,
+        context: { usedTokens: 200000, maxTokens: 256000, usedFraction: 200000 / 256000, remainingFraction: 1 - 200000 / 256000, estimated: false },
+        contextBreakdown: {
+          version: 1,
+          source: 'host-breakdown',
+          compactedPending: false,
+          systemTokens: 20000,
+          extensionsTokens: 30000,
+          toolsTokens: 100000,
+          messagesTokens: 50000,
+          totalTokens: 200000,
+        },
+      },
+    };
+    await new Promise(r => setTimeout(r, 3200));
+    assert.equal(createdIds.get('ctx-breakdown').hidden, false);
+    assert.equal(createdIds.get('ctx-sys-val').textContent, '20K');
+    assert.equal(createdIds.get('ctx-ext-val').textContent, '30K');
+    assert.equal(createdIds.get('ctx-tools-val').textContent, '100K');
+    assert.equal(createdIds.get('ctx-msg-val').textContent, '50K');
+    assert.equal(createdIds.get('ctx-ext-row').hidden, false);
+    assert.equal(createdIds.get('ctx-other-row').hidden, true);
+    assert.equal(createdIds.get('context-note').hidden, false);
+    assert.equal(createdIds.get('context-note').textContent, '悬停分组查看具体说明。');
+    assert.equal(createdIds.get('context-card').getAttribute('data-hover-seg'), null);
+    createdIds.get('context-percent').parentElement.dispatch('click');
+    assert.equal(createdIds.get('context-card').hidden, false);
+    createdIds.get('ctx-ext-row').dispatch('pointerenter');
+    assert.equal(createdIds.get('context-card').getAttribute('data-hover-seg'), 'ext');
+    assert.equal(createdIds.get('context-note').textContent, '已加载规则、Skills、MCP 与子代理。');
+    createdIds.get('ctx-ext-row').dispatch('pointerleave');
+    assert.equal(createdIds.get('context-card').getAttribute('data-hover-seg'), null);
+    assert.equal(createdIds.get('context-note').textContent, '悬停分组查看具体说明。');
+
+    // 6. Tier 3: active context without breakdown or transcript hides meaningless 0 rows and shows smooth status note
+    hostMetrics = {
+      ...hostMetrics,
+      speed: {
+        ...hostMetrics.speed,
+        status: 'CASCADE_RUN_STATUS_RUNNING',
+        context: { usedTokens: 48000, maxTokens: 256000, usedFraction: 48000 / 256000, remainingFraction: 1 - 48000 / 256000, estimated: true },
+        contextBreakdown: {
+          version: 1,
+          source: 'compaction-pending',
+          compactedPending: true,
+          systemTokens: 0,
+          extensionsTokens: 0,
+          toolsTokens: 0,
+          messagesTokens: 0,
+          totalTokens: 0,
+        },
+        transcriptStats: null,
+      },
+    };
+    await new Promise(r => setTimeout(r, 3200));
+    assert.equal(createdIds.get('ctx-breakdown').hidden, true);
+    assert.equal(createdIds.get('context-note').hidden, false);
+    assert.equal(createdIds.get('context-note').textContent, '刚完成上下文压缩，精确构成将在下一轮请求后更新。');
+    assert.equal(createdIds.get('ctx-seg-other').style.getPropertyValue('width'), '18.75%');
   } finally {
     globalThis.window?.__agPulseDispose?.();
     for (const [k, v] of Object.entries(prev)) {
@@ -579,6 +661,7 @@ test('inline-widget keeps speed chip on live empty new chats (showEmpty: false) 
 
   const makeNode = tag => {
     const attrs = new Map();
+    const listeners = new Map();
     let _id = '';
     const el = {
       tagName: String(tag || 'div').toUpperCase(),
@@ -622,8 +705,9 @@ test('inline-widget keeps speed chip on live empty new chats (showEmpty: false) 
       matches: () => false,
       getClientRects: () => [{ width: 20, height: 20 }],
       getBoundingClientRect: () => ({ left: 100, top: 300, right: 100 + fakeClientWidth, bottom: 328, width: fakeClientWidth, height: 28 }),
-      addEventListener() {},
-      removeEventListener() {},
+      addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(fn); },
+      removeEventListener(type, fn) { listeners.get(type)?.delete(fn); },
+      dispatch(type, event = {}) { for (const fn of listeners.get(type) || []) fn({ stopPropagation() {}, preventDefault() {}, target: el, currentTarget: el, ...event }); },
       focus() {},
       animate: () => ({ cancel() {} }),
       showPopover() {},
