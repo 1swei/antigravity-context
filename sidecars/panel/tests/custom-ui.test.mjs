@@ -411,7 +411,7 @@ test('inline-widget executes mount + render for empty new session (0/0%) and act
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   globalThis.getComputedStyle = el => el === bodyEl
     ? { fontFamily: '"Google Sans Flex", sans-serif', getPropertyValue: () => '' }
-    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: 'light', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
+    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: '', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
   globalThis.window = {
     innerWidth: 1000,
     innerHeight: 800,
@@ -847,7 +847,7 @@ test('inline-widget keeps speed chip on live empty new chats (showEmpty: false) 
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   globalThis.getComputedStyle = el => el === bodyEl
     ? { fontFamily: '"Google Sans Flex", sans-serif', getPropertyValue: () => '' }
-    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: 'light', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
+    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: '', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
   globalThis.window = {
     innerWidth: 1000, innerHeight: 800,
     matchMedia: globalThis.matchMedia,
@@ -1515,10 +1515,11 @@ test('usage-ui header update button shows red dot on available update and suppor
 
     idMap.get('update-btn').dispatch('click');
     assert.equal(idMap.get('update-menu').open, true);
+    assert.equal(idMap.get('upd-status').textContent, '插件更新');
     assert.equal(idMap.get('upd-cur').textContent, 'v1.0.0');
     assert.equal(idMap.get('upd-lat').textContent, 'v1.0.1');
     assert.equal(idMap.get('upd-notes').textContent, '• 更新：精简界面\n• 第2行\n• 第3行\n• 第4行\n…');
-    assert.equal(idMap.get('upd-feedback').textContent, '');
+    assert.equal(idMap.get('upd-feedback').textContent, '发现新版本');
     assert.equal(idMap.get('upd-action').textContent, '立即更新');
     await new Promise(r => setImmediate(r));
     assert.deepEqual(calls[0], { action: 'check' });
@@ -1528,21 +1529,24 @@ test('usage-ui header update button shows red dot on available update and suppor
     idMap.get('upd-action').dispatch('click');
     await new Promise(r => setImmediate(r));
     assert.deepEqual(calls[1], { action: 'apply', version: '1.0.2' });
-    assert.equal(idMap.get('upd-status').textContent, '更新已安装，正在自动重载…');
-    assert.equal(idMap.get('upd-feedback').textContent, '新版本将在几秒内自动生效');
-    assert.equal(idMap.get('upd-action').hidden, true);
+    assert.equal(idMap.get('upd-status').textContent, '插件更新');
+    assert.equal(idMap.get('upd-feedback').textContent, '正在更新…');
+    assert.equal(idMap.get('upd-action').hidden, false);
+    assert.equal(idMap.get('upd-action').disabled, true);
+    assert.equal(idMap.get('upd-action').textContent, '立即更新');
     assert.equal(idMap.get('update-dot').hidden, true);
     assert.deepEqual(dash.getUpdateState(), { state: 'reloading', currentVersion: '1.0.2', latestVersion: '1.0.2', progress: { phase: 'complete' }, busy: false, menuOpen: true });
     assert.equal(idMap.get('update-notice'), undefined);
 
     dash.confirmUpdateReloaded('1.0.2');
-    assert.equal(idMap.get('upd-status').textContent, '更新成功，插件已自动重载');
-    assert.equal(idMap.get('upd-status').dataset.state, 'reloaded');
-    assert.equal(idMap.get('upd-feedback').textContent, '已切换至最新版本');
+    assert.equal(idMap.get('upd-status').textContent, '插件更新');
+    assert.equal(idMap.get('upd-feedback').dataset.state, 'reloaded');
+    assert.equal(idMap.get('upd-feedback').textContent, '更新成功，插件已自动重载');
     assert.equal(idMap.get('upd-cur').textContent, 'v1.0.2');
     assert.equal(idMap.get('upd-lat').textContent, 'v1.0.2');
     assert.equal(idMap.get('upd-prog-wrap').hidden, true);
     assert.equal(idMap.get('upd-action').hidden, false);
+    assert.equal(idMap.get('upd-action').disabled, false);
     assert.equal(idMap.get('upd-action').textContent, '检查更新');
 
     dash.close();
@@ -1717,7 +1721,7 @@ test('inline-widget reopens usage modal after update reload and shows reload-suc
   };
   globalThis.getComputedStyle = el => el === bodyEl
     ? { fontFamily: '"Google Sans Flex", sans-serif', getPropertyValue: () => '' }
-    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: 'light', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
+    : { display: 'flex', flexDirection: 'row', position: 'static', visibility: 'visible', colorScheme: '', marginLeft: '0', marginRight: '0', columnGap: '4', paddingLeft: '0', paddingRight: '0', gap: '4', fontFamily: 'system-ui', getPropertyValue: () => '' };
   globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   globalThis.MutationObserver = class { observe() {} disconnect() {} };
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };
@@ -1752,6 +1756,7 @@ test('inline-widget reopens usage modal after update reload and shows reload-suc
           tokens: { totalTokens: 1000, cachedTokens: 900, uncachedTokens: 100, cacheWriteTokens: 0, outputTokens: 50, measuredRequests: 1 },
         },
         usage: { accountKey: 'acct', today: '2026-11-18', firstDate: '2026-11-18', timeZone: 'Asia/Shanghai', requests: 1, todayTokens: 1000, weekTokens: 1000, monthTokens: 1000, totalTokens: 1000, models: [], days: [] },
+        theme: { mode: 'dark', dark: { primary: '#e78a4e', background: '#141617', foregroundOverride: '#d4be98' } },
         update: currentVersion === '1.0.7'
           ? { state: 'available', currentVersion: '1.0.7', latestVersion: '1.0.8' }
           : { state: 'current', currentVersion: '1.0.8', latestVersion: '1.0.8' },
@@ -1782,11 +1787,19 @@ test('inline-widget reopens usage modal after update reload and shows reload-suc
     const oldDialog = createdIds.get('usage-dashboard');
     const oldUpdateMenu = createdIds.get('update-menu');
     const oldClose = createdIds.get('close');
+    const bgBeforePark = oldBar.style.getPropertyValue('--pulse-background');
+    const accentBeforePark = oldBar.style.getPropertyValue('--pulse-accent');
+    const fontBeforePark = oldBar.style.getPropertyValue('--pulse-font');
+    assert.equal(bgBeforePark, 'rgb(20 22 23)');
+    assert.equal(accentBeforePark, 'rgb(231 138 78)');
     globalThis.window.__agPulseDispose();
     assert.equal(oldDialog.open, true, 'parked usage modal must remain open during reload');
     assert.equal(oldUpdateMenu.open, true, 'parked update popover must remain open during reload');
     assert.equal(oldBar.isConnected, true);
     assert.equal(oldBar.id, '');
+    assert.equal(oldBar.style.getPropertyValue('--pulse-background'), bgBeforePark, 'parked modal must preserve custom background variable');
+    assert.equal(oldBar.style.getPropertyValue('--pulse-accent'), accentBeforePark, 'parked modal must preserve custom accent variable');
+    assert.equal(oldBar.style.getPropertyValue('--pulse-font'), fontBeforePark, 'parked modal must preserve host font variable');
     assert.equal(typeof globalThis.window.__agPulseRetireModal, 'function');
     assert.equal(globalThis.window.__agPulseHandover?.updateReload?.reopenModal, true);
     assert.equal(globalThis.window.__agPulseHandover?.updateReload?.reopenUpdateMenu, true);
@@ -1798,7 +1811,13 @@ test('inline-widget reopens usage modal after update reload and shows reload-suc
     createdIds = new Map();
     installInline();
     assert.equal(createdIds.get('usage-dashboard').open, true, 'new usage modal opens seamlessly in-place');
+    assert.equal(createdIds.get('usage-intro').hidden, true, 'dismissed usage-intro banner must never flash on frame 1 of reload');
     assert.equal(createdIds.get('update-menu').open, true, 'new update popover remains open in-place');
+    assert.equal(createdIds.get('update-menu').dataset.instant, 'true', 'handover update popover suppresses @starting-style animation');
+    assert.equal(createdIds.get('version-tag').hidden, false, 'version tag stays visible on frame 1');
+    assert.equal(createdIds.get('version-tag').textContent, 'v1.0.8');
+    assert.equal(createdIds.get('ag-pulse-status-bar').style.getPropertyValue('--pulse-background'), bgBeforePark);
+    assert.equal(createdIds.get('ag-pulse-status-bar').style.getPropertyValue('--pulse-accent'), accentBeforePark);
     assert.equal(oldDialog.open, false, 'old parked modal must be retired in the same frame');
     assert.equal(oldBar.isConnected, false, 'old parked host must be removed from DOM');
     assert.equal(globalThis.window.__agPulseRetireModal, undefined);
@@ -1807,11 +1826,27 @@ test('inline-widget reopens usage modal after update reload and shows reload-suc
     assert.equal(createdIds.get('usage-dashboard').open, true);
     assert.equal(createdIds.get('version-tag').textContent, 'v1.0.8');
     assert.equal(createdIds.get('update-notice'), undefined);
-    assert.equal(createdIds.get('upd-status').textContent, '更新成功，插件已自动重载');
-    assert.equal(createdIds.get('upd-status').dataset.state, 'reloaded');
-    assert.equal(createdIds.get('upd-feedback').textContent, '已切换至最新版本');
+    assert.equal(createdIds.get('upd-status').textContent, '插件更新');
+    assert.equal(createdIds.get('upd-feedback').dataset.state, 'reloaded');
+    assert.equal(createdIds.get('upd-feedback').textContent, '更新成功，插件已自动重载');
     assert.equal(createdIds.get('upd-cur').textContent, 'v1.0.8');
     assert.equal(createdIds.get('upd-lat').textContent, 'v1.0.8');
+
+    // Second consecutive host restart within post-update grace window must keep modal parked & open
+    const midDialog = createdIds.get('usage-dashboard');
+    const midBar = createdIds.get('ag-pulse-status-bar');
+    globalThis.window.__agPulseDispose();
+    assert.equal(midDialog.open, true, 'modal must survive a second consecutive host restart in grace window');
+    assert.equal(midBar.style.getPropertyValue('--pulse-background'), bgBeforePark);
+    createdIds = new Map();
+    installInline();
+    assert.equal(createdIds.get('usage-dashboard').open, true);
+    assert.equal(createdIds.get('update-menu').open, true);
+    assert.equal(createdIds.get('update-menu').dataset.instant, 'true');
+    assert.equal(createdIds.get('upd-status').dataset.state, 'reloaded', 'second hop stays in reloaded state without bouncing back to reloading');
+    assert.equal(createdIds.get('upd-prog-wrap').hidden, true);
+    assert.equal(midDialog.open, false);
+    await new Promise(r => setTimeout(r, 30));
 
     // User cancelling/closing parked modal mid-reload must prevent reopening on new mount
     createdIds.get('upd-action').dispatch('click'); // Check for updates from reloaded state

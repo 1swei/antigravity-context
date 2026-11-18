@@ -170,9 +170,46 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def fetch(url, limit, destination=None, metadata=False, method='GET', progress=None, deadline=None):
+def _settings_path():
+    if os.name == 'nt':
+        local = os.environ.get('LOCALAPPDATA') or str(Path.home() / 'AppData' / 'Local')
+    elif sys.platform == 'darwin':
+        local = str(Path.home() / 'Library' / 'Application Support')
+    else:
+        local = os.environ.get('XDG_DATA_HOME') or str(Path.home() / '.local' / 'share')
+    return Path(local) / 'AntigravityPulse' / 'settings.json'
+
+
+def resolve_update_origin():
+    """Optional loopback-only local update source for development testing."""
+    raw = os.environ.get('AG_PULSE_UPDATE_ORIGIN')
+    if raw is None:
+        try:
+            settings = json.loads(_settings_path().read_text(encoding='utf-8-sig'))
+            if isinstance(settings, dict):
+                raw = settings.get('updateOrigin')
+        except (OSError, ValueError):
+            raw = None
+    if raw is None or raw == '':
+        return None
+    if not isinstance(raw, str):
+        raise ValueError('Untrusted update origin')
+    cleaned = raw.strip().rstrip('/')
+    if not cleaned:
+        return None
+    parsed = urllib.parse.urlsplit(cleaned)
+    if (parsed.scheme not in ('http', 'https') or
+            parsed.hostname not in ('127.0.0.1', 'localhost') or
+            parsed.port is None or not 1 <= parsed.port <= 65535 or
+            parsed.username or parsed.password or
+            parsed.path or parsed.query or parsed.fragment):
+        raise ValueError('Untrusted update origin')
+    return f'{parsed.scheme}://{parsed.hostname}:{parsed.port}'
+
+
+def fetch(url, limit, destination=None, metadata=False, method='GET', progress=None, deadline=None, origin=None):
     try:
-        return _fetch(url, limit, destination, metadata, method, progress, deadline)
+        return _fetch(url, limit, destination, metadata, method, progress, deadline, origin)
     except Exception as error:
         detail = network_failure(error)
         if detail is None:
@@ -180,11 +217,11 @@ def fetch(url, limit, destination=None, metadata=False, method='GET', progress=N
         raise NetworkError(detail, getattr(error, 'code', None)) from error
 
 
-def _fetch(url, limit, destination, metadata, method, progress, deadline):
+def _fetch(url, limit, destination, metadata, method, progress, deadline, origin=None):
     destination_anchor = DirectoryAnchor(destination.parent) if destination else None
     if destination_anchor:
         destination = destination_anchor.path / destination.name
-    proxies = update_proxies()
+    proxies = {} if origin is not None else update_proxies()
     opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies), NoRedirect())
     deadline = min(deadline, time.monotonic() + 90) if deadline is not None else time.monotonic() + 90
     def remaining_timeout():
@@ -203,7 +240,7 @@ def _fetch(url, limit, destination, metadata, method, progress, deadline):
             # handshake. Retry once with TLS 1.2 while retaining trusted CA and
             # hostname verification. Certificate failures are never retried.
             retryable = isinstance(reason, (ssl.SSLError, EOFError, ConnectionResetError, FileNotFoundError))
-            if compatibility or isinstance(error, urllib.error.HTTPError) or isinstance(reason, ssl.SSLCertVerificationError) or not retryable:
+            if origin is not None or compatibility or isinstance(error, urllib.error.HTTPError) or isinstance(reason, ssl.SSLCertVerificationError) or not retryable:
                 raise
             context = ssl.create_default_context()
             context.maximum_version = ssl.TLSVersion.TLSv1_2
@@ -212,9 +249,14 @@ def _fetch(url, limit, destination, metadata, method, progress, deadline):
             return opener.open(request, timeout=remaining_timeout())
     allowed = {'api.github.com', 'github.com', 'release-assets.githubusercontent.com',
                'objects.githubusercontent.com', 'github-releases.githubusercontent.com'}
+    origin_parsed = urllib.parse.urlsplit(origin) if origin is not None else None
     for _ in range(5):
         parsed = urllib.parse.urlsplit(url)
-        if parsed.scheme != 'https' or parsed.hostname not in allowed or parsed.username or parsed.password or parsed.port not in (None, 443):
+        if origin_parsed is not None:
+            if (parsed.scheme != origin_parsed.scheme or parsed.hostname != origin_parsed.hostname or
+                    parsed.port != origin_parsed.port or parsed.username or parsed.password):
+                raise ValueError('Untrusted update URL')
+        elif parsed.scheme != 'https' or parsed.hostname not in allowed or parsed.username or parsed.password or parsed.port not in (None, 443):
             raise ValueError('Untrusted update URL')
         req = urllib.request.Request(url, headers={'User-Agent': 'Antigravity-Context-Updater', 'Accept': 'application/vnd.github+json'}, method=method)
         try:
@@ -268,32 +310,34 @@ def _fetch(url, limit, destination, metadata, method, progress, deadline):
     raise ValueError('Too many update redirects')
 
 
-def public_release(current, deadline=None):
+def public_release(current, deadline=None, origin=None):
     """Public HTML fallback for API rate limits; no credentials are requested."""
-    _, final, _ = fetch(f'https://github.com/{REPO}/releases/latest', 1048576, metadata=True, deadline=deadline)
+    web_origin = origin or 'https://github.com'
+    expected_host = urllib.parse.urlsplit(web_origin).hostname
+    _, final, _ = fetch(f'{web_origin}/{REPO}/releases/latest', 1048576, metadata=True, deadline=deadline, origin=origin)
     parsed = urllib.parse.urlsplit(final)
     prefix = f'/{REPO}/releases/tag/v'
-    if parsed.hostname != 'github.com' or not parsed.path.startswith(prefix) or parsed.query:
+    if parsed.hostname != expected_host or not parsed.path.startswith(prefix) or parsed.query:
         raise ValueError('Unexpected public release page')
     latest = parsed.path[len(prefix):]
     version(latest)
     release = {'tag_name': 'v' + latest, 'assets': []}
     if version(latest) <= version(current):
         return release
-    content = html.unescape(fetch(f'https://github.com/{REPO}/releases/expanded_assets/v{latest}', 1048576, deadline=deadline).decode('utf-8'))
+    content = html.unescape(fetch(f'{web_origin}/{REPO}/releases/expanded_assets/v{latest}', 1048576, deadline=deadline, origin=origin).decode('utf-8'))
     name = f'antigravity-context-{latest}.zip'
-    base = f'https://github.com/{REPO}/releases/download/v{latest}/'
+    base = f'{web_origin}/{REPO}/releases/download/v{latest}/'
     for filename in (name, name + '.sha256'):
         path = f'/{REPO}/releases/download/v{latest}/{filename}'
         if f'href="{path}"' not in content and f'href="{base + filename}"' not in content:
             raise ValueError('Missing exact public release asset')
-        _, _, length = fetch(base + filename, 0, metadata=True, method='HEAD', deadline=deadline)
+        _, _, length = fetch(base + filename, 0, metadata=True, method='HEAD', deadline=deadline, origin=origin)
         release['assets'].append({'name': filename, 'browser_download_url': base + filename,
                                   'size': int(length) if length and length.isdigit() else None})
     return release
 
 
-def release_plan(release, current, host='app'):
+def release_plan(release, current, host='app', origin=None):
     version(current)
     if host != 'app':
         raise ValueError('This updater supports Antigravity App only')
@@ -311,7 +355,8 @@ def release_plan(release, current, host='app'):
     hashes = [a for a in assets if a.get('name') == name + '.sha256']
     if len(matched) != 1 or len(hashes) != 1:
         raise ValueError('Exact App archive and checksum are required')
-    base = f'https://github.com/{REPO}/releases/download/{tag}/'
+    download_origin = origin or 'https://github.com'
+    base = f'{download_origin}/{REPO}/releases/download/{tag}/'
     if matched[0].get('browser_download_url') != base + name or hashes[0].get('browser_download_url') != base + name + '.sha256':
         raise ValueError('Asset identity mismatch')
     size = matched[0].get('size')
@@ -325,12 +370,13 @@ def release_plan(release, current, host='app'):
     return result
 
 
-def latest_release(current):
+def latest_release(current, origin=None):
     deadline = time.monotonic() + CHECK_BUDGET
     initial_error = None
+    api_origin = origin or 'https://api.github.com'
     try:
-        return json.loads(fetch(f'https://api.github.com/repos/{REPO}/releases/latest', 262144,
-                                deadline=min(deadline, time.monotonic() + API_BUDGET)))
+        return json.loads(fetch(f'{api_origin}/repos/{REPO}/releases/latest', 262144,
+                                deadline=min(deadline, time.monotonic() + API_BUDGET), origin=origin))
     except (urllib.error.HTTPError, NetworkError) as error:
         status = error.code if isinstance(error, urllib.error.HTTPError) else error.status
         if status == 404:
@@ -343,7 +389,7 @@ def latest_release(current):
         # it is also usable when a proxy cannot reach api.github.com.
         initial_error = error
     try:
-        return public_release(current, deadline=deadline)
+        return public_release(current, deadline=deadline, origin=origin)
     except Exception as error:
         if initial_error is not None and network_failure(initial_error) == 'certificate' and network_failure(error):
             raise NetworkError('certificate') from error
@@ -766,7 +812,7 @@ def install_staged(stage, target, backup, current, expected, fault=None, progres
         raise
 
 
-def perform(plan, target, updates, progress=None):
+def perform(plan, target, updates, progress=None, origin=None):
     def report(phase, **fields):
         if progress:
             try: progress({'phase': phase, **fields})
@@ -790,7 +836,8 @@ def perform(plan, target, updates, progress=None):
     # Reconstruct and validate the plan rather than trusting persisted URLs.
     latest = plan['latestVersion']
     name = f'antigravity-context-{latest}.zip'
-    base = f'https://github.com/{REPO}/releases/download/v{latest}/'
+    download_origin = origin or 'https://github.com'
+    base = f'{download_origin}/{REPO}/releases/download/v{latest}/'
     if plan.get('host') != 'app' or plan.get('currentVersion') != current or plan.get('name') != name or plan.get('url') != base + name or plan.get('checksumUrl') != base + name + '.sha256' or version(latest) <= version(current):
         raise ValueError('Update plan is stale or invalid')
     updates.mkdir(parents=True, exist_ok=True)
@@ -808,11 +855,11 @@ def perform(plan, target, updates, progress=None):
             archive = working / name
             report('verify')
             working_anchor.check()
-            expected_hash = checksum(fetch(plan['checksumUrl'], 8192).decode('utf-8'), name)
+            expected_hash = checksum(fetch(plan['checksumUrl'], 8192, origin=origin).decode('utf-8'), name)
             report('download', received=0, total=plan.get('size'))
             working_anchor.check()
             options = {'progress': lambda count: report('download', received=count, total=plan.get('size'))} if progress else {}
-            received = fetch(plan['url'], MAX_ZIP, archive, **options)
+            received = fetch(plan['url'], MAX_ZIP, archive, origin=origin, **options)
             report('verify')
             working_anchor.check()
             if received != plan.get('size') or digest(archive) != expected_hash:
@@ -879,15 +926,17 @@ def main():
         if args.action == 'recover':
             result = {'version': current, 'recovered': recovered}
         elif args.action == 'check':
-            release = latest_release(current)
-            result = release_plan(release, current)
+            origin = resolve_update_origin()
+            release = latest_release(current, origin=origin)
+            result = release_plan(release, current, origin=origin)
         else:
             if not args.plan or not args.updates:
                 raise ValueError('Update job paths required')
             text = args.plan.read_text(encoding='utf-8')
             if len(text) > 8192:
                 raise ValueError('Update plan exceeds budget')
-            result = perform(json.loads(text), args.target, args.updates, progress=emit_progress)
+            origin = resolve_update_origin()
+            result = perform(json.loads(text), args.target, args.updates, progress=emit_progress, origin=origin)
         print(json.dumps({'ok': True, 'result': result}, ensure_ascii=True))
     except Exception as error:
         # Only static error categories cross into the renderer, never proxy

@@ -3,8 +3,17 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.9` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.10` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-18`
+
+---
+
+## v1.0.10 (`2026-11-18`)
+
+- **Preserve Custom Theme & Survive Consecutive Dual Restarts**: Switched in-place modal parking to per-property layout styling and handed over host `theme` and `--pulse-font` cleanly; added a `15s` post-reload grace window and fixed `lastConversation` initialization so consecutive host/sidecar restarts never close the open usage modal or drop custom colors.
+- **Zero-Flicker Seamless Handover**: Bypassed `#update-menu` `@starting-style` pop-in transitions on parking and swap, restored `#version-tag` and `usageGuideDismissed` on frame 1 (eliminating the brief flash of the dismissed usage intro banner), preserved modal scroll position, date range, and model filters, and kept the `reloaded` state sticky across a second restart.
+- **Calm, Single-Source Update Popover Copy**: Pinned the popover header permanently to **"Plugin update"**, kept action button labels steady during checks/installs, simplified progress labels to **Downloading… / Installing…**, and consolidated all dynamic status, completion, and error messages into the single bottom-left feedback line.
+- **Loopback-Only Local Update Source for Development**: Added optional `AG_PULSE_UPDATE_ORIGIN` / `settings.json` (`updateOrigin`) support in [update-worker.py](compat/update-worker.py) strictly restricted to `127.0.0.1` / `localhost` with an explicit port (disabled by default, leaving production GitHub HTTPS validation unchanged).
 
 ---
 

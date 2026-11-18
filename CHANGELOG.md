@@ -3,8 +3,17 @@
 **简体中文** · [English](CHANGELOG.en.md)
 
 - **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
-- **当前版本**：`1.0.9`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
+- **当前版本**：`1.0.10`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
 - **更新时间**：`2026-11-18`
+
+---
+
+## v1.0.10（`2026-11-18`）
+
+- **更新重载主题与双连重启稳定保持**：原位停泊改为逐项写布局样式并透传自定义主题（`--pulse-*`）与宿主字体（`--pulse-font`）；新增 `15s` 重载宽限期并修正 `lastConversation` 初始值，确保宿主与 sidecar 在数秒内连续双重启时弹窗不关闭、主题不闪烁。
+- **真正无感交接（零动画、零回弹、零闪现）**：跳过停泊与接替时 `#update-menu` 的 `@starting-style` 缩放淡入动画；首帧即透传 `#version-tag` 与 `usageGuideDismissed`（彻底消除已关闭的「知道了」引导横幅在重载首帧一闪而过），并完整保留弹窗滚动位置、日期范围与模型筛选状态，锁定二次重启态不回弹。
+- **更新小弹窗交互减噪**：顶部标题永久固定为「插件更新」，更新期间保持底部操作按钮文案稳定、进度条仅分「下载中… / 安装中…」，所有状态、成功与报错文案统一收敛到底部左侧单处展示。
+- **本地回环更新源测试支持**：[update-worker.py](compat/update-worker.py) 新增仅限 `127.0.0.1` / `localhost` 的开发更新源配置（`AG_PULSE_UPDATE_ORIGIN` 或 `settings.json` 的 `updateOrigin`），默认关闭，完全不影响线上 GitHub Releases 安全校验。
 
 ---
 

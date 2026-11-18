@@ -20,7 +20,7 @@ module.exports = function installAgPulseInlineWidget() {
   // /c/<id> URL, and must never inherit the desktop's conversation fallback.
   const surface=window.__agPulseSurface;
   const setMarkup=(element,markup)=>{if(surface?.setMarkup)surface.setMarkup(element,markup);else element.innerHTML=markup;};
-  let node=null,root=null,data=null,pending=false,cardName=null,hoverTimer=null,openTimer=null,warmUntil=0,lastConversation=null,lastFetch=0,resizeObserver=null,themeController=null,changingCards=false;
+  let node=null,root=null,data=null,pending=false,cardName=null,hoverTimer=null,openTimer=null,warmUntil=0,lastConversation=undefined,lastFetch=0,resizeObserver=null,themeController=null,changingCards=false;
   const HOVER_DELAY=250,WARM_WINDOW=350,LEAVE_DELAY=120;
   const isWarm=()=>Boolean(cardName||Date.now()<warmUntil);
   let refreshRequest=null,manualRequest=null,requestEpoch=0,disposed=false;
@@ -32,8 +32,8 @@ module.exports = function installAgPulseInlineWidget() {
   let usageGuideDismissed=false;
   let hoveredCtxRow=null,baseCtxNoteKey='';
   const SNAP_KEY='ag-pulse-snap-v1',SNAP_TTL=10*60*1000;
-  const UPDATE_HANDOVER_KEY='ag-pulse-update-reload-v1',UPDATE_HANDOVER_TTL=2*60*1000;
-  let pendingUpdateReload=null,awaitingReloadConfirmVersion=undefined;
+  const UPDATE_HANDOVER_KEY='ag-pulse-update-reload-v1',UPDATE_HANDOVER_TTL=2*60*1000,UPDATE_GRACE_MS=15000;
+  let pendingUpdateReload=null,awaitingReloadConfirmVersion=undefined,updateGraceUntil=0,lastReloadMeta=null;
   const takeUpdateReload=()=>{
     let found=null;
     try{
@@ -49,11 +49,18 @@ module.exports = function installAgPulseInlineWidget() {
     if(!found||typeof found!=='object'||!found.reopenModal)return null;
     const now=Date.now();
     if(!Number.isFinite(found.at)||now-found.at>UPDATE_HANDOVER_TTL||now<found.at-5000)return null;
-    return {reopenModal:true,reopenUpdateMenu:Boolean(found.reopenUpdateMenu),toVersion:typeof found.toVersion==='string'&&found.toVersion?found.toVersion:null};
+    return {
+      reopenModal:true,
+      reopenUpdateMenu:Boolean(found.reopenUpdateMenu),
+      toVersion:typeof found.toVersion==='string'&&found.toVersion?found.toVersion:null,
+      settled:Boolean(found.settled),
+      guideDismissed:Boolean(found.guideDismissed),
+      viewState:found.viewState&&typeof found.viewState==='object'?found.viewState:null,
+    };
   };
   const sanitizeSnap=value=>{
     if(!value||(!value.speed&&!value.usage))return null;
-    return {connection:'stale',speed:value.speed||null,usage:value.usage||null,collection:value.collection||null,groups:value.groups||[]};
+    return {connection:'stale',speed:value.speed||null,usage:value.usage||null,collection:value.collection||null,groups:value.groups||[],...(value.theme?{theme:value.theme}:{})};
   };
   const saveSessionSnap=(id,value)=>{
     const snap=sanitizeSnap(value);
@@ -664,6 +671,7 @@ module.exports = function installAgPulseInlineWidget() {
     // Escape ancestor stacking/paint contexts; ordinary z-index cannot do this.
     if(typeof HTMLElement==='function'&&typeof HTMLElement.prototype.showPopover==='function')for(const card of root.querySelectorAll('.card'))card.setAttribute('popover','manual');
     themeController=theme.attach(node,{embedded:true});
+    if(data?.theme)themeController.setHostTheme(data.theme);
     report('mounted',{editorFound:true,composerFound:true});
     observeComposer();
     for(const chip of root.querySelectorAll('[data-card]')){
@@ -697,8 +705,9 @@ module.exports = function installAgPulseInlineWidget() {
         #open-usage{align-items:center;min-height:34px;gap:12px;width:calc(100% + 12px);margin:5px -6px -3px;padding:7px 6px;border:0;border-radius:6px;background:transparent;color:var(--pulse-label);font-size:11px;text-align:left;line-height:20px}#open-usage:hover{background:var(--pulse-hover);color:var(--pulse-foreground)}#open-usage svg{width:14px;height:14px;color:var(--pulse-muted);flex:none}
         .usage-open-main{display:inline-flex;align-items:center;gap:6px;min-width:0}.usage-update-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;flex:none}.usage-update-dot[hidden]{display:none}
       `;
-      usageDashboard=window.__agPulseUsageFactory({root,language,setMarkup,hostLabel:surface?.usageHostLabel||'Antigravity',guideDismissed:usageGuideDismissed,onDismissGuide:async()=>{const saved=await window.agPulseHost.setPreferences({usageGuideDismissed:true});if(saved?.usageGuideDismissed!==true)throw Error('Usage guide could not be saved');syncGuide(saved);},onLanguage:next=>preferences.choose(next),onRefresh:()=>refreshManually('refresh'),onUpdate:typeof window.agPulseHost?.updatePlugin==='function'?input=>window.agPulseHost.updatePlugin(input):null});
       pendingUpdateReload||=takeUpdateReload();
+      if(pendingUpdateReload?.guideDismissed||window.__agPulseHandover?.guideDismissed)usageGuideDismissed=true;
+      usageDashboard=window.__agPulseUsageFactory({root,language,setMarkup,hostLabel:surface?.usageHostLabel||'Antigravity',guideDismissed:usageGuideDismissed,onDismissGuide:async()=>{const saved=await window.agPulseHost.setPreferences({usageGuideDismissed:true});if(saved?.usageGuideDismissed!==true)throw Error('Usage guide could not be saved');syncGuide(saved);},onLanguage:next=>preferences.choose(next),onRefresh:()=>refreshManually('refresh'),onUpdate:typeof window.agPulseHost?.updatePlugin==='function'?input=>window.agPulseHost.updatePlugin(input):null});
       $('open-usage').addEventListener('click',()=>{const trigger=root.querySelector('[data-card=cache]'),conversation=conversationId();hide();const cachedUsage=data?.usage?{...data.usage,syncing:false,syncMode:null,syncProgress:null}:data?.usage;usageDashboard.open(cachedUsage,trigger,data?.update);void window.agPulseHost.getMetrics({conversationId:conversation,force:true,usageCheck:true}).then(result=>{if(disposed)return;if(result?.usage){data=result;usageDashboard.update(result.usage,result.update);}const modalSync=Boolean(usageDashboard?.isOpen&&!document.hidden&&(result?.usage?.syncMode||(result?.usage?.syncing&&result?.usage?.summaryStale!==true)));if(modalSync&&!modalSyncTimer){modalSyncTimer=setTimeout(()=>{modalSyncTimer=null;if(!disposed&&usageDashboard?.isOpen&&!document.hidden)refresh();},250);modalSyncTimer.unref?.();}}).catch(()=>{});});
     }
     localize();
@@ -714,16 +723,22 @@ module.exports = function installAgPulseInlineWidget() {
       if(pendingUpdateReload?.reopenModal&&data.usage){
         const handover=pendingUpdateReload;
         pendingUpdateReload=null;
+        updateGraceUntil=Date.now()+UPDATE_GRACE_MS;
+        const liveUpdate=data?.update;
+        const settled=Boolean(handover.settled||(liveUpdate&&!['installing','installed','reloading'].includes(liveUpdate.state)));
+        const resolvedVersion=liveUpdate?.currentVersion||handover.toVersion||null;
+        lastReloadMeta={toVersion:resolvedVersion,reopenUpdateMenu:handover.reopenUpdateMenu,settled,viewState:handover.viewState||null};
+        if(data?.theme)themeController?.setHostTheme(data.theme);
         const trigger=root.querySelector('[data-card=cache]');
         const cachedUsage={...data.usage,syncing:false,syncMode:null,syncProgress:null};
+        const initialUpdate=liveUpdate||(resolvedVersion?{state:settled?'current':'reloading',host:'app',currentVersion:resolvedVersion,latestVersion:resolvedVersion,...(settled?{}:{progress:{phase:'complete'}})}:undefined);
         hide();
-        usageDashboard.open(cachedUsage,trigger,data?.update);
-        const liveUpdate=data?.update;
-        const settled=Boolean(liveUpdate&&!['installing','installed','reloading'].includes(liveUpdate.state));
+        usageDashboard.open(cachedUsage,trigger,initialUpdate,{viewState:handover.viewState||null,settledVersion:settled?resolvedVersion:null});
         if(handover.reopenUpdateMenu){
-          usageDashboard.showUpdateMenu(settled
-            ?{reloadedVersion:liveUpdate.currentVersion||handover.toVersion}
-            :{reloadingVersion:handover.toVersion});
+          usageDashboard.showUpdateMenu({
+            ...(settled?{reloadedVersion:resolvedVersion}:{reloadingVersion:resolvedVersion}),
+            instant:true,
+          });
         }
         try{window.__agPulseRetireModal?.();}catch{}
         awaitingReloadConfirmVersion=settled?undefined:handover.toVersion;
@@ -733,6 +748,7 @@ module.exports = function installAgPulseInlineWidget() {
           const version=liveUpdate.currentVersion||awaitingReloadConfirmVersion||null;
           awaitingReloadConfirmVersion=undefined;
           if(usageDashboard.isOpen)usageDashboard.confirmUpdateReloaded(version);
+          if(lastReloadMeta){if(version)lastReloadMeta.toVersion=version;lastReloadMeta.settled=true;}
         }
       }
     }
@@ -960,24 +976,28 @@ module.exports = function installAgPulseInlineWidget() {
   window.__agPulseDispose=()=>{
     const dashUpdate=usageDashboard?.getUpdateState?.();
     const updState=dashUpdate?.state||data?.update?.state;
-    const isUpdatingReload=['installed','reloading'].includes(updState)||(updState==='installing'&&dashUpdate?.busy);
+    const isUpdatingReload=['installed','reloading'].includes(updState)||(updState==='installing'&&dashUpdate?.busy)||(Date.now()<updateGraceUntil);
+    const reloadViewState=isUpdatingReload&&usageDashboard?.isOpen?(usageDashboard.getViewState?.()||lastReloadMeta?.viewState||null):null;
     const updateReload=isUpdatingReload&&usageDashboard?.isOpen?{
       reopenModal:true,
-      reopenUpdateMenu:Boolean(dashUpdate?.menuOpen),
-      toVersion:dashUpdate?.currentVersion||dashUpdate?.latestVersion||data?.update?.currentVersion||data?.update?.latestVersion||null,
+      reopenUpdateMenu:Boolean(dashUpdate?.menuOpen||lastReloadMeta?.reopenUpdateMenu),
+      toVersion:dashUpdate?.currentVersion||dashUpdate?.latestVersion||data?.update?.currentVersion||data?.update?.latestVersion||lastReloadMeta?.toVersion||null,
+      settled:Boolean(lastReloadMeta?.settled&&awaitingReloadConfirmVersion===undefined),
+      guideDismissed:Boolean(usageGuideDismissed),
+      ...(reloadViewState?{viewState:reloadViewState}:{}),
       at:Date.now(),
     }:null;
     if(updateReload){try{if(typeof sessionStorage!=='undefined')sessionStorage.setItem(UPDATE_HANDOVER_KEY,JSON.stringify(updateReload));}catch{}}
-    if(data?.speed||data?.usage||updateReload){try{window.__agPulseHandover={conversationId:lastConversation,data,at:Date.now(),...(updateReload?{updateReload}:{})};}catch{}saveSessionSnap(lastConversation,data);}
+    if(data?.speed||data?.usage||updateReload){try{window.__agPulseHandover={conversationId:lastConversation,data,at:Date.now(),...(usageGuideDismissed?{guideDismissed:true}:{}),...(updateReload?{updateReload}:{})};}catch{}saveSessionSnap(lastConversation,data);}
     else{try{delete window.__agPulseHandover;}catch{}}
     disposed=true;requestEpoch++;pending=false;refreshRequest=null;stopDensityMotion();densityFrame=null;densityProbe=null;
     clearInterval(timerId);clearTimeout(modalSyncTimer);modalSyncTimer=null;clearTimeout(hoverTimer);clearTimeout(openTimer);if(layoutFrame!==null)cancelAnimationFrame(layoutFrame);observer.disconnect();resizeObserver?.disconnect();themeController?.dispose();preferences.dispose();hide();
     if(updateReload&&node&&usageDashboard){
       try{window.__agPulseRetireModal?.();}catch{}
-      const parkedNode=node,parkedDash=usageDashboard,parkedMenu=Boolean(dashUpdate?.menuOpen);
+      const parkedNode=node,parkedDash=usageDashboard,parkedMenu=Boolean(updateReload.reopenUpdateMenu);
       const bar=root?.querySelector?.('.bar');if(bar)bar.hidden=true;
       parkedNode.id='';parkedNode.removeAttribute('id');
-      parkedNode.style.cssText='position:fixed;width:0;height:0;margin:0;overflow:visible;pointer-events:none;z-index:2147482999;';
+      for(const [k,v] of [['position','fixed'],['left','0'],['top','0'],['width','0'],['height','0'],['max-width','none'],['margin','0'],['overflow','visible'],['pointer-events','none'],['z-index','2147482999']])style(parkedNode,k,v);
       document.body?.append?.(parkedNode);
       let retireTimer=null;
       const retire=()=>{
@@ -988,10 +1008,11 @@ module.exports = function installAgPulseInlineWidget() {
       retireTimer=setTimeout(retire,20000);retireTimer.unref?.();
       window.__agPulseRetireModal=retire;
       parkedDash.parkForReload(parkedMenu,()=>{
+        updateGraceUntil=0;lastReloadMeta=null;
         try{if(window.__agPulseHandover?.updateReload)delete window.__agPulseHandover.updateReload;}catch{}
         try{if(typeof sessionStorage!=='undefined')sessionStorage.removeItem(UPDATE_HANDOVER_KEY);}catch{}
         retire();
-      });
+      },reloadViewState?.scrollTop??null);
     }else{
       usageDashboard?.dispose();node?.remove();
     }

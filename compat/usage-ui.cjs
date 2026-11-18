@@ -66,19 +66,21 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     .year-picker{position:relative;flex:none}.year-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:6px;min-width:74px;height:28px;padding:0 8px 0 10px;background:var(--pulse-control);border:1px solid var(--pulse-separator);color:var(--pulse-foreground);font-size:11px;font-weight:450;border-radius:8px;font-family:var(--pulse-mono,ui-monospace,monospace)}.year-trigger:hover,.year-trigger[aria-expanded=true]{background:var(--pulse-hover);border-color:var(--pulse-border)}.menu-chevron{width:16px;height:16px;color:var(--pulse-muted);transition:transform 160ms cubic-bezier(.23,1,.32,1)}.year-trigger[aria-expanded=true] .menu-chevron{transform:rotate(180deg)}
     .menu-list{position:fixed;inset:auto;margin:0;padding:4px;min-width:108px;max-height:240px;overflow-y:auto;border:1px solid var(--pulse-border);border-radius:10px;background:var(--pulse-menu);color:var(--pulse-foreground);box-shadow:0 8px 26px var(--pulse-shadow);transform-origin:top right;opacity:1;transform:scale(1);transition:opacity 140ms ease,transform 160ms cubic-bezier(.23,1,.32,1)}.menu-list::backdrop{background:transparent;pointer-events:none}.menu-list.month-menu{min-width:168px}.menu-list.custom-menu{width:236px;max-height:none;padding:12px;overflow:visible}
     .menu-list.update-menu{width:292px;max-height:none;padding:14px;overflow:visible}
-    .upd-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.upd-head strong{font-size:13px;font-weight:550;color:var(--pulse-foreground)}.upd-head strong[data-state=reloaded]{color:var(--pulse-success)}
+    .upd-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.upd-head strong{font-size:13px;font-weight:550;color:var(--pulse-foreground)}
     .upd-meta{margin:0 0 10px;display:flex;flex-direction:column;gap:5px}.upd-meta>div{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px}.upd-meta dt{color:var(--pulse-muted)}.upd-meta dd{margin:0;font-family:var(--pulse-mono,ui-monospace,monospace);font-size:11.5px}
     .upd-prog-wrap{margin:10px 0}.upd-prog-wrap[hidden]{display:none}.upd-prog-head{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:var(--pulse-muted);margin-bottom:5px;font-family:var(--pulse-mono,ui-monospace,monospace)}
     .upd-prog-track{position:relative;height:4px;border-radius:999px;background:var(--pulse-track);overflow:hidden}#upd-prog-fill{position:absolute;inset:0;border-radius:inherit;background:var(--pulse-accent);transform-origin:left;transform:scaleX(0);transition:transform 220ms cubic-bezier(.23,1,.32,1)}
     .upd-prog-wrap[data-indeterminate=true] #upd-prog-fill{animation:upd-indet 1.2s linear infinite}
     @keyframes upd-indet{from{transform:translateX(-40%) scaleX(.4)}to{transform:translateX(100%) scaleX(.4)}}
     .upd-notes{margin:8px 0 0;padding:8px 10px;border-radius:7px;background:var(--pulse-control);border:1px solid var(--pulse-separator);font-size:11px;line-height:1.5;color:var(--pulse-muted);white-space:pre-line;max-height:96px;overflow:auto}.upd-notes[hidden]{display:none}
-    .upd-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--pulse-separator)}.upd-foot span{font-size:10.5px;color:var(--pulse-muted);line-height:1.35;min-width:0}
+    .upd-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--pulse-separator)}.upd-foot span{font-size:10.5px;color:var(--pulse-muted);line-height:1.35;min-width:0}.upd-foot span[data-state=reloaded]{color:var(--pulse-success)}.upd-foot span[data-state=error]{color:var(--pulse-warning)}
     .upd-foot button{flex:none;height:26px;padding:0 11px;border-radius:7px;font-size:11px;font-weight:500;border:1px solid var(--pulse-border);background:var(--pulse-control);color:var(--pulse-foreground)}.upd-foot button:hover:not([disabled]){background:var(--pulse-hover)}.upd-foot button.primary{border-color:transparent;background:var(--pulse-accent);color:#fff}.upd-foot button.primary:hover:not([disabled]){filter:brightness(1.06)}.upd-foot button[hidden]{display:none}
     .custom-fields{display:flex;flex-direction:column;gap:10px}.custom-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--pulse-muted)}.custom-field input{height:30px;padding:0 8px;border:1px solid var(--pulse-border);border-radius:7px;background:var(--pulse-control);color:var(--pulse-foreground);font:12px/1.2 var(--pulse-mono,ui-monospace,monospace);color-scheme:inherit}.custom-field input:focus-visible{outline:2px solid var(--pulse-accent);outline-offset:1px}
     .custom-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:2px}.custom-actions button{height:26px;padding:0 11px;border-radius:7px;font-size:11px;font-weight:450;border:1px solid var(--pulse-separator);background:var(--pulse-control);color:var(--pulse-foreground)}.custom-actions button:hover{background:var(--pulse-hover)}.custom-actions button.primary{border-color:transparent;background:var(--pulse-accent);color:#fff;font-weight:500}.custom-actions button.primary:hover{filter:brightness(1.06)}
     .menu-option{width:100%;border:0;border-radius:6px;padding:6px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;text-align:left;background:transparent;color:var(--pulse-foreground);font-family:var(--pulse-mono,ui-monospace,monospace)}.menu-option:hover,.menu-option:focus-visible{background:var(--pulse-hover)}.menu-option[aria-selected=true]{background:color-mix(in srgb,var(--pulse-accent) 12%,var(--pulse-menu));font-weight:500}.menu-meta{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--pulse-muted)}.menu-check{color:var(--pulse-accent);width:15px;height:15px;opacity:0}.menu-option[aria-selected=true] .menu-check{opacity:1}
     @starting-style{.menu-list:popover-open{opacity:0;transform:scale(.97)}}
+    .menu-list[data-instant=true]{transition:none!important}
+    @starting-style{.menu-list[data-instant=true]:popover-open{opacity:1;transform:scale(1)}}
     .usage-intro{display:flex;align-items:center;gap:10px;margin:12px 0 0;padding:9px 12px;border:1px solid var(--pulse-separator);border-radius:10px;background:var(--pulse-control);font-size:11.5px;line-height:1.5;color:var(--pulse-muted)}.usage-intro[hidden]{display:none}
     .intro-mark{display:flex;color:var(--pulse-accent);flex:none}.intro-mark svg{width:16px;height:16px}
     .intro-copy{flex:1;min-width:0}.intro-copy p{margin:0}
@@ -524,10 +526,17 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
       menu.style.left=Math.max(bounds.left+12,Math.min(r.right-width,bounds.right-width-12))+'px';const below=r.bottom+7;
       menu.style.top=(below+height<=bounds.bottom-12?below:Math.max(bounds.top+12,r.top-height-7))+'px';
     };
-    const open=()=>{
+    const open=(instant=false)=>{
       onBeforeOpen?.();
       for(const other of menus)if(other.menu!==menu)other.close(false);
-      $('tip').hidden=true;hideActionTip();menu.showPopover();trigger.setAttribute('aria-expanded','true');position();
+      $('tip').hidden=true;hideActionTip();
+      if(instant)menu.dataset.instant='true';else delete menu.dataset.instant;
+      menu.showPopover();trigger.setAttribute('aria-expanded','true');position();
+      if(instant){
+        const clear=()=>{delete menu.dataset.instant;};
+        if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>requestAnimationFrame(clear));
+        else setTimeout(clear,32);
+      }
       if(listbox)([...menu.children].find(o=>o.getAttribute('aria-selected')==='true')||menu.firstElementChild)?.focus({preventScroll:true});
       else menu.querySelector('input,button')?.focus({preventScroll:true});
     };
@@ -567,39 +576,38 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
     const tipTitle=hasNew?w('发现新版本 · 点击查看更新','Update available · Click to update','發現新版本 · 點擊查看更新'):w('检查插件更新','Check for updates','檢查外掛更新');
     btn.setAttribute('aria-label',tipTitle);setActionTip(btn,tipTitle);
     $('update-menu').setAttribute('aria-label',w('插件更新','Plugin update','外掛更新'));
-    const statusMap={
-      idle:w('检查更新','Check for updates','檢查更新'),
+    const feedbackMap={
+      idle:'',
       checking:w('正在检查更新…','Checking for updates…','正在檢查更新…'),
       current:w('已是最新版本','You’re up to date','已是最新版本'),
-      available:w(`发现新版本 v${s.latestVersion||''}`,`Update available: v${s.latestVersion||''}`,`發現新版本 v${s.latestVersion||''}`),
-      installing:w('正在下载并安装…','Downloading and installing…','正在下載並安裝…'),
-      installed:w('更新已安装，正在自动重载…','Update installed; reloading…','更新已安裝，正在自動重載…'),
-      reloading:w('更新已安装，正在自动重载…','Update installed; reloading…','更新已安裝，正在自動重載…'),
+      available:w('发现新版本','Update available','發現新版本'),
+      installing:w('正在更新…','Updating…','正在更新…'),
+      installed:w('正在更新…','Updating…','正在更新…'),
+      reloading:w('正在更新…','Updating…','正在更新…'),
       reloaded:w('更新成功，插件已自动重载','Update complete; reloaded','更新成功，外掛已自動重載'),
-      error:w('更新检查或安装失败','Update incomplete','更新未完成'),
     };
     const statusEl=$('upd-status');
-    text('upd-status',statusMap[dispState]||statusMap.error);
+    text('upd-status',w('插件更新','Plugin update','外掛更新'));
     statusEl.dataset.state=dispState;
     text('upd-cur-lbl',w('当前版本','Installed','目前版本'));
     text('upd-lat-lbl',w('最新版本','Latest','最新版本'));
     text('upd-cur',curVer?'v'+curVer:'—');
     const latVer=dispState==='reloaded'?(s.latestVersion||curVer):s.latestVersion;
     text('upd-lat',latVer?'v'+latVer:'—');
-    const prog=s.progress||{},inProg=['checking','installing','reloading','installed'].includes(dispState);
+    const prog=s.progress||{},inProg=['installing','reloading','installed'].includes(dispState),isBusy=dispState==='checking'||inProg;
     const progWrap=$('upd-prog-wrap');progWrap.hidden=!inProg;
     if(inProg){
       const phaseLabels={
-        check:w('连接 GitHub…','Checking GitHub…','連線至 GitHub…'),
-        verify:w('校验签名与安装包…','Verifying package…','驗證安裝套件…'),
-        download:w('正在下载…','Downloading…','正在下載…'),
-        extract:w('正在解压…','Extracting…','正在解壓縮…'),
-        backup:w('备份当前版本…','Backing up…','備份目前版本…'),
-        install:w('写入更新文件…','Installing…','寫入更新檔案…'),
+        check:w('正在检查…','Checking…','正在檢查…'),
+        verify:w('安装中…','Installing…','安裝中…'),
+        download:w('下载中…','Downloading…','下載中…'),
+        extract:w('安装中…','Installing…','安裝中…'),
+        backup:w('安装中…','Installing…','安裝中…'),
+        install:w('安装中…','Installing…','安裝中…'),
         recover:w('正在恢复备份…','Restoring backup…','正在還原備份…'),
-        complete:w('完成','Complete','完成'),
+        complete:w('安装中…','Installing…','安裝中…'),
       };
-      text('upd-prog-lbl',phaseLabels[prog.phase]||statusMap[dispState]);
+      text('upd-prog-lbl',phaseLabels[prog.phase]||(feedbackMap[dispState]||w('正在更新…','Updating…','正在更新…')));
       const known=prog.phase==='download'&&Number.isSafeInteger(prog.total)&&prog.total>0&&Number.isSafeInteger(prog.received)&&prog.received>=0;
       progWrap.dataset.indeterminate=known?'false':'true';
       text('upd-prog-val',known?`${Math.min(100,Math.round(prog.received/prog.total*100))}% · ${formatBytes(prog.received)}/${formatBytes(prog.total)}`:'');
@@ -630,12 +638,13 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
       'install-location':w('插件路径校验失败（不支持符号链接）','Plugin path validation failed.','外掛路徑驗證失敗'),
       'plan-expired':w('更新信息已过期，请重新检查','Update plan expired; check again.','更新資訊已過期，請重新檢查'),
     };
-    const fb=dispState==='error'?(errMap[s.errorDetail]||errMap[s.error]||errMap.network):dispState==='available'?'':(dispState==='reloading'||dispState==='installed')?w('新版本将在几秒内自动生效','Activating new version shortly','新版本將在幾秒內自動生效'):dispState==='reloaded'?w('已切换至最新版本','Now running latest version','已切換至最新版本'):w('自动后台检查已开启','Auto-check enabled','已開啟自動檢查');
-    text('upd-feedback',fb);
+    const fb=dispState==='error'?(errMap[s.errorDetail]||errMap[s.error]||errMap.network):(feedbackMap[dispState]||'');
+    const fbEl=$('upd-feedback');
+    if(fbEl){fbEl.dataset.state=dispState;text('upd-feedback',fb);}
     const act=$('upd-action');
-    act.hidden=inProg;act.disabled=updateBusy||inProg||typeof onUpdate!=='function';
-    act.className=dispState==='available'?'primary':'';
-    text('upd-action',dispState==='available'?w('立即更新','Update now','立即更新'):dispState==='error'?w('重试','Retry','重試'):w('检查更新','Check now','檢查更新'));
+    act.hidden=false;act.disabled=updateBusy||isBusy||typeof onUpdate!=='function';
+    act.className=(dispState==='available'||inProg)?'primary':'';
+    text('upd-action',(dispState==='available'||inProg)?w('立即更新','Update now','立即更新'):dispState==='error'?w('重试','Retry','重試'):w('检查更新','Check now','檢查更新'));
     if(!parked&&updateMenu.isOpen()&&inProg){if(!updateTimer)updateTimer=setInterval(()=>void sendUpdate({action:'status'}),300);}
     else stopUpdatePoll();
   }
@@ -869,11 +878,12 @@ module.exports = function createUsageDashboard({root,language,setMarkup,hostLabe
   // theme change, rather than waiting for the next metrics poll.
   const themeObserver=new MutationObserver(()=>{if(!disposed&&value&&dialog.open){const key=contentKey(value);if(key!==lastKey){lastKey=key;render();}}});
   if(root.host)themeObserver.observe(root.host,{attributes:true,attributeFilter:['data-pulse-theme','style']});
-  return {open(data,trigger,nextUpdate){if(nextUpdate!==undefined)updateState=nextUpdate;if(!data||disposed)return;finishProgressBar();accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();},
+  return {open(data,trigger,nextUpdate,{viewState=null,settledVersion=null}={}){if(nextUpdate!==undefined)updateState=nextUpdate;if(settledVersion)postReloadVersion=settledVersion;if(!data||disposed)return;finishProgressBar();accountKey=data.accountKey;value=normalizeUsage(data);opener=trigger;if(viewState&&typeof viewState==='object'){if(['7d','30d','month','year','custom'].includes(viewState.rangeMode))rangeMode=viewState.rangeMode;if(typeof viewState.year==='string')year=viewState.year;if(typeof viewState.anchorMonth==='string')anchorMonth=viewState.anchorMonth;if(typeof viewState.customFrom==='string')customFrom=viewState.customFrom;if(typeof viewState.customTo==='string')customTo=viewState.customTo;selectedDate=typeof viewState.selectedDate==='string'?viewState.selectedDate:null;disabledModels=new Set(Array.isArray(viewState.disabledModels)?viewState.disabledModels:[]);}year||=value.today.slice(0,4);anchorMonth||=value.today.slice(0,7);if(!customFrom){const d30=add(value.today,-29);customFrom=value.firstDate&&d30<value.firstDate?value.firstDate:d30;}customTo||=value.today;lastKey=contentKey(data);render();present();if(Number.isFinite(viewState?.scrollTop))page.scrollTop=viewState.scrollTop;},
     update(data,nextUpdate){if(disposed)return;if(nextUpdate!==undefined){updateState=nextUpdate;renderUpdate();}if(!data){if(!value)return;value=null;lastKey='';if(dialog.open)render();return;}if(accountKey&&accountKey!==data.accountKey){selectedDate=null;disabledModels.clear();year=data.today.slice(0,4);anchorMonth=data.today.slice(0,7);const d30=add(data.today,-29);customFrom=data.firstDate&&d30<data.firstDate?data.firstDate:d30;customTo=data.today;}accountKey=data.accountKey;value=normalizeUsage(data);if(!dialog.open)return;const key=contentKey(data);if(key===lastKey)return;lastKey=key;render();},
     restoreModal(){if(!disposed&&dialog.open&&dialog.isConnected&&!dialog.matches(':popover-open')){closeMenus();present();}},
-    parkForReload(restoreMenu=false,onCancel=null){if(disposed||!dialog.open)return;parked=true;onParkCancel=typeof onCancel==='function'?onCancel:null;stopUpdatePoll();if(!dialog.matches(':popover-open'))present();if(restoreMenu&&!updateMenu.isOpen()){updateMenu.open();renderUpdate();}else if(updateMenu.isOpen())updateMenu.position();},
-    showUpdateMenu({reloadedVersion=null,reloadingVersion=null}={}){if(disposed||!dialog.open)return;if(reloadedVersion){postReloadVersion=reloadedVersion;if(!updateState||['installing','installed','reloading'].includes(updateState.state))updateState={state:'current',currentVersion:reloadedVersion,latestVersion:reloadedVersion};}else if(reloadingVersion){postReloadVersion=null;updateState={state:'reloading',currentVersion:reloadingVersion,latestVersion:reloadingVersion,progress:{phase:'complete'}};}if(!updateMenu.isOpen())updateMenu.open();renderUpdate();},
+    getViewState(){return {rangeMode,year,anchorMonth,customFrom,customTo,selectedDate,disabledModels:[...disabledModels],scrollTop:page.scrollTop||0};},
+    parkForReload(restoreMenu=false,onCancel=null,scrollTop=null){if(disposed||!dialog.open)return;parked=true;onParkCancel=typeof onCancel==='function'?onCancel:null;stopUpdatePoll();if(!dialog.matches(':popover-open'))present();if(Number.isFinite(scrollTop))page.scrollTop=scrollTop;if(restoreMenu&&!updateMenu.isOpen()){updateMenu.open(true);renderUpdate();}else if(updateMenu.isOpen())updateMenu.position();},
+    showUpdateMenu({reloadedVersion=null,reloadingVersion=null,instant=false}={}){if(disposed||!dialog.open)return;if(reloadedVersion){postReloadVersion=reloadedVersion;if(!updateState||['installing','installed','reloading'].includes(updateState.state))updateState={state:'current',currentVersion:reloadedVersion,latestVersion:reloadedVersion};}else if(reloadingVersion){postReloadVersion=null;updateState={state:'reloading',currentVersion:reloadingVersion,latestVersion:reloadingVersion,progress:{phase:'complete'}};}if(!updateMenu.isOpen())updateMenu.open(instant);renderUpdate();},
     confirmUpdateReloaded(version){if(disposed)return;postReloadVersion=version||updateState?.currentVersion||null;if(postReloadVersion&&(!updateState||['installing','installed','reloading'].includes(updateState.state)))updateState={state:'current',currentVersion:postReloadVersion,latestVersion:postReloadVersion};renderUpdate();},
     getUpdateState(){return {...(updateState||{state:'idle'}),busy:updateBusy,menuOpen:updateMenu.isOpen()};},
     close,syncGuideDismissed(){if(!replayGuide)dismissGuide();},dispose(){disposed=true;stopUpdatePoll();cancelProgressTimers();languagePicker.dispose();themeObserver.disconnect();refreshMotion?.cancel();for(const m of menus)m.dispose();document.removeEventListener('focusin',containFocus,true);document.removeEventListener('keydown',containKeys,true);document.removeEventListener('wheel',containScroll,true);document.removeEventListener('touchmove',containScroll,true);document.removeEventListener('pointermove',onMutedMove);for(const type of ['pointerdown','mousedown','click'])document.removeEventListener(type,containPointer,true);conceal();dialog.remove();backdrop.remove();},get isOpen(){return dialog.open;}};

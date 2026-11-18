@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,writeFile,readFile,rm,readdir} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rm,readdir} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
+import {createServer} from 'node:http';
+import {createHash} from 'node:crypto';
+import {spawn,execFileSync} from 'node:child_process';
 import {AppUpdater,runUpdateWorker,releaseRuntimeDirectory} from '../updater.mjs';
 import {EventEmitter} from 'node:events';
 
@@ -267,4 +270,79 @@ test('manual check request refreshes even when a newer update was already cached
  await service.check();assert.equal(service.publicState().latestVersion,'0.8.7');
  latest='0.8.8';await service.request({action:'check'});await service.checkPending;
  assert.equal(service.publicState().latestVersion,'0.8.8');
+});
+
+test('real worker rejects non-loopback update origins and supports loopback local update server end-to-end',async t=>{
+ const worker=fileURLToPath(new URL('../../../compat/update-worker.py',import.meta.url));
+ const home=await mkdtemp(join(tmpdir(),'ag-home-'));
+ t.after(()=>rm(home,{recursive:true,force:true}));
+ const pluginDir=join(home,'.gemini','config','plugins','antigravity-context');
+ const updatesDir=join(home,'updates');
+ await mkdir(join(pluginDir,'compat'),{recursive:true});
+ await mkdir(join(pluginDir,'sidecars','panel'),{recursive:true});
+ await mkdir(join(pluginDir,'assets'),{recursive:true});
+ const writeRuntime=async ver=>{
+  await writeFile(join(pluginDir,'plugin.json'),JSON.stringify({name:'antigravity-context',version:ver}));
+  await writeFile(join(pluginDir,'compat','inline-widget.cjs'),'// '+ver);
+  await writeFile(join(pluginDir,'compat','runtime-ui.mjs'),'// '+ver);
+  await writeFile(join(pluginDir,'compat','i18n.cjs'),'// '+ver);
+  await writeFile(join(pluginDir,'compat','theme.cjs'),'// '+ver);
+  await writeFile(join(pluginDir,'sidecars','panel','main.mjs'),'// '+ver);
+  await writeFile(join(pluginDir,'sidecars','panel','metrics.mjs'),'// '+ver);
+  await writeFile(join(pluginDir,'sidecars','panel','history.mjs'),'// '+ver);
+  await writeFile(join(pluginDir,'assets','logo.svg'),'<svg/>');
+ };
+ await writeRuntime('1.0.9');
+ const envSpawn=extraEnv=>(cmd,args,opts)=>spawn(cmd,args,{...opts,env:{...process.env,HOME:home,USERPROFILE:home,LOCALAPPDATA:join(home,'AppData','Local'),...extraEnv}});
+
+ let probeFail;
+ try{await runUpdateWorker(worker,['check','--target',pluginDir],{spawnImpl:envSpawn({AG_PULSE_UPDATE_ORIGIN:'https://evil.example.com:443'})});}
+ catch(error){probeFail=error;}
+ if(probeFail?.message==='python'){t.skip('Python 3.10+ is unavailable');return;}
+ assert.equal(probeFail?.message,'verification');
+ await assert.rejects(()=>runUpdateWorker(worker,['check','--target',pluginDir],{spawnImpl:envSpawn({AG_PULSE_UPDATE_ORIGIN:'http://127.0.0.1:17999/extra'})}),error=>error.message==='verification');
+
+ const zipPath=join(home,'antigravity-context-1.0.10.zip');
+ const pyZip=`import json,pathlib,zipfile\nz=zipfile.ZipFile(r"${zipPath.replace(/\\/g,'\\\\')}","w")\nroot=pathlib.Path(r"${pluginDir.replace(/\\/g,'\\\\')}")\nfor p in root.rglob("*"):
+ if p.is_file():
+  rel=p.relative_to(root).as_posix()
+  data=json.dumps({"name":"antigravity-context","version":"1.0.10"}).encode() if rel=="plugin.json" else p.read_bytes()
+  z.writestr("antigravity-context/"+rel,data)\nz.close()`;
+ execFileSync('python',['-c',pyZip]);
+ const zipBytes=await readFile(zipPath);
+ const shaText=createHash('sha256').update(zipBytes).digest('hex')+'  antigravity-context-1.0.10.zip\n';
+
+ const server=createServer((req,res)=>{
+  const addr=server.address();
+  const base=`http://127.0.0.1:${addr.port}/1swei/antigravity-context/releases/download/v1.0.10/`;
+  if(req.url==='/repos/1swei/antigravity-context/releases/latest'){
+   res.writeHead(200,{'Content-Type':'application/json'});
+   res.end(JSON.stringify({tag_name:'v1.0.10',draft:false,prerelease:false,body:'Local test',assets:[
+    {name:'antigravity-context-1.0.10.zip',browser_download_url:base+'antigravity-context-1.0.10.zip',size:zipBytes.length},
+    {name:'antigravity-context-1.0.10.zip.sha256',browser_download_url:base+'antigravity-context-1.0.10.zip.sha256',size:Buffer.byteLength(shaText)},
+   ]}));
+   return;
+  }
+  if(req.url==='/1swei/antigravity-context/releases/download/v1.0.10/antigravity-context-1.0.10.zip.sha256'){
+   res.writeHead(200,{'Content-Type':'text/plain'});res.end(shaText);return;
+  }
+  if(req.url==='/1swei/antigravity-context/releases/download/v1.0.10/antigravity-context-1.0.10.zip'){
+   res.writeHead(200,{'Content-Type':'application/zip','Content-Length':String(zipBytes.length)});res.end(zipBytes);return;
+  }
+  res.writeHead(404);res.end();
+ });
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ t.after(()=>server.close());
+ const origin=`http://127.0.0.1:${server.address().port}`;
+ const service=new AppUpdater({pluginDir,dataDir:updatesDir,worker,run:(w,a,o)=>runUpdateWorker(w,a,{...o,spawnImpl:envSpawn({AG_PULSE_UPDATE_ORIGIN:origin})})});
+ const checked=await service.check();
+ assert.equal(checked.state,'available',JSON.stringify(checked));assert.equal(checked.latestVersion,'1.0.10');
+ const progress=[];
+ const origRun=service.run;
+ service.run=(w,a,o)=>origRun(w,a,{...o,onProgress:p=>{progress.push(p.phase);o?.onProgress?.(p);}});
+ await service.apply('1.0.10');await service.job;
+ assert.equal(service.publicState().state,'reloading');
+ assert.equal(service.publicState().currentVersion,'1.0.10');
+ assert.equal(JSON.parse(await readFile(join(pluginDir,'plugin.json'),'utf8')).version,'1.0.10');
+ assert.ok(progress.includes('download')&&progress.includes('complete'));
 });

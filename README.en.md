@@ -8,7 +8,7 @@
 
 A lightweight, local-first Antigravity plugin that injects an inline context window & telemetry bar into the chat composer and provides an interactive Token usage analytics modal.
 
-[MIT License](LICENSE) · Version `v1.0.9` · [Changelog](CHANGELOG.en.md)
+[MIT License](LICENSE) · Version `v1.0.10` · [Changelog](CHANGELOG.en.md)
 
 </div>
 
