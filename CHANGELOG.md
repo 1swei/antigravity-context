@@ -3,8 +3,15 @@
 **简体中文** · [English](CHANGELOG.en.md)
 
 - **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
-- **当前版本**：`1.0.10`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
-- **更新时间**：`2026-11-18`
+- **当前版本**：`1.0.11`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
+- **更新时间**：`2026-11-21`
+
+---
+
+## v1.0.11（`2026-11-21`）
+
+- **兼容 Antigravity `2.34.0+` 宿主注入凭据**：[client.mjs](sidecars/panel/client.mjs) 新增并导出 `serverFromEnv()`，当新版 `language_server` 不再通过命令行参数传递 `--csrf_token` 时自动使用宿主为 sidecar 注入的 `ANTIGRAVITY_LS_ADDRESS` 与 scoped `ANTIGRAVITY_CSRF_TOKEN`；严格校验环回 HTTP 地址（`127.0.0.1` / `localhost` / `[::1]`）与安全 Token，保留旧版 `--csrf_token` 发现兼容，防止跨代端口错配并支持多实例消歧。
+- **无 CDP 调试口时的 Sidecar 保活与诊断**：[main.mjs](sidecars/panel/main.mjs) 启用 `integration.start({ keepAlive: true })`，避免在 Antigravity `2.33.0+` 未传入 `--remote-debugging-port=0` 时因定时器 `.unref()` 导致 sidecar 每 60s 退出退避重启；[runtime-ui.mjs](compat/runtime-ui.mjs) 细化 `cdp-port-missing` 状态码与诊断文案。
 
 ---
 

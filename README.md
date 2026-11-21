@@ -8,7 +8,7 @@
 
 轻量、本地优先的 Antigravity 插件：在对话输入框内直接展示实时上下文占用、分段构成、生成速度、缓存命中率，并提供交互式 Token 用量统计弹窗。
 
-[MIT License](LICENSE) · 版本 `v1.0.10` · [更新日志](CHANGELOG.md)
+[MIT License](LICENSE) · 版本 `v1.0.11` · [更新日志](CHANGELOG.md)
 
 </div>
 

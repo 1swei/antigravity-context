@@ -3,8 +3,15 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.10` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
-- **Updated**: `2026-11-18`
+- **Current Version**: `1.0.11` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Updated**: `2026-11-21`
+
+---
+
+## v1.0.11 (`2026-11-21`)
+
+- **Support Host-Injected Credentials in Antigravity `2.34.0+`**: Added and exported `serverFromEnv()` in [client.mjs](sidecars/panel/client.mjs) to consume `ANTIGRAVITY_LS_ADDRESS` and the scoped `ANTIGRAVITY_CSRF_TOKEN` injected by the host when `language_server` omits `--csrf_token` from its CLI args; enforces strict loopback HTTP (`127.0.0.1` / `localhost` / `[::1]`) and token validation, preserves legacy `--csrf_token` discovery, prevents cross-generation port mismatches, and disambiguates multiple instances.
+- **Sidecar Keep-Alive & Diagnostics Without CDP**: Enabled `integration.start({ keepAlive: true })` in [main.mjs](sidecars/panel/main.mjs) so the sidecar stays alive when Antigravity `2.33.0+` launches without `--remote-debugging-port=0` instead of cycling every 60s; refined `cdp-port-missing` health reporting in [runtime-ui.mjs](compat/runtime-ui.mjs).
 
 ---
 

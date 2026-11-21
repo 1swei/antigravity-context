@@ -156,8 +156,8 @@ export class RuntimeUi {
     this.owner=owner;this.owns=owns;
     this.binding=owner?BINDING+'_'+owner.replaceAll('-',''):BINDING;
   }
-  async setHealth(state, message) {
-    this.health = { state, mode: 'runtime', message, windows: this.sessions.size, checkedAt: new Date().toISOString() };
+  async setHealth(state, message, extra = {}) {
+    this.health = { state, mode: 'runtime', message, windows: this.sessions.size, checkedAt: new Date().toISOString(), ...extra };
     if (this.dataDir&&await this.owns()) { try { await mkdir(this.dataDir, { recursive: true }); await writeFile(join(this.dataDir, 'integration-state.json'), JSON.stringify(this.health)); } catch { /* Read-only state reporting must not crash collection. */ } }
   }
   async event(connection, message) {
@@ -319,7 +319,10 @@ export class RuntimeUi {
       const mounted=[...this.sessions.values()].some(c=>c.mounted);
       await this.setHealth(mounted ? 'mounted' : this.sessions.size ? 'waiting-for-composer' : 'waiting',
         mounted ? 'Dashboard attached to the conversation composer' : this.sessions.size ? 'Renderer connected; waiting for a conversation composer if needed' : 'Waiting for the app renderer');
-    } catch { await this.setHealth('reconnecting', 'Inline connection unavailable; the side panel remains available. Retrying automatically.'); }
+    } catch (error) {
+      const cdpMissing = error?.code === 'ENOENT';
+      await this.setHealth('reconnecting', cdpMissing ? 'Inline composer bar requires Antigravity launched with --remote-debugging-port=0 (DevToolsActivePort not found).' : 'Inline connection unavailable; retrying automatically.', { code: cdpMissing ? 'cdp-port-missing' : 'connection-unavailable' });
+    }
     finally { this.busy = false; }
   }
   async detach(connection) {
@@ -340,9 +343,9 @@ export class RuntimeUi {
     for (const connection of this.sessions.values()) await this.detach(connection);
     this.sessions.clear();
   }
-  start() {
+  start({ keepAlive = false } = {}) {
     if (this.running) return; this.running = true; this.stopping = false;
-    void this.tick(); this.timer = setInterval(() => { void this.tick(); }, this.interval); this.timer.unref?.();
+    void this.tick(); this.timer = setInterval(() => { void this.tick(); }, this.interval); if (!keepAlive) this.timer.unref?.();
   }
   async stop() { this.running = false; this.stopping = true; clearInterval(this.timer); await this.detachAll(); }
 }

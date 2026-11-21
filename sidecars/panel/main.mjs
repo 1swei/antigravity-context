@@ -77,7 +77,7 @@ const integration = new RuntimeUi({
 
 if (isHostSidecar) {
   if(!await ownership.claim())process.exit(0);
-  integration.start();
+  integration.start({ keepAlive: true });
   // Automatic background update check on startup and every 6 hours.
   let startupUpdateTimer=null,periodicUpdateTimer=null;
   const runAutoUpdateCheck=()=>{if(typeof updater.check==='function')void updater.check({silent:true}).catch(()=>{});};

@@ -281,3 +281,12 @@ test('takeover during attachment removes old preload and leaves no retained conn
   assert.equal(connections[0].calls.some(call=>call.method==='Runtime.evaluate'),false);
   await ui.stop();
 });
+
+test('missing DevToolsActivePort sets cdp-port-missing code while preserving reconnecting state',async()=>{
+  const {ui}=fixture();
+  ui.discover=async()=>{const err=new Error('ENOENT');err.code='ENOENT';throw err;};
+  await ui.tick();
+  assert.equal(ui.health.state,'reconnecting');
+  assert.equal(ui.health.code,'cdp-port-missing');
+  await ui.stop();
+});
