@@ -3,8 +3,19 @@
 [简体中文](CHANGELOG.md) · **English**
 
 - **Plugin ID**: `antigravity-context` (Display name: `Antigravity Context`)
-- **Current Version**: `1.0.11` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
+- **Current Version**: `1.0.12` (forked from the open-source `antigrative-dashboard` / `antigravity-pulse` `0.8.20` baseline)
 - **Updated**: `2026-11-21`
+
+---
+
+## v1.0.12 (`2026-11-21`)
+
+- **Fix Infinite Retry Loop & Misleading Copy on Oversized Conversations (#1)**:
+  - Preserved background `collection` failure details and introduced `retryable` state tracking in [background-statistics.mjs](sidecars/panel/background-statistics.mjs) and [store.mjs](sidecars/panel/store.mjs): permanent failures (`budget-exceeded`, `unsupported-runtime`, `disk-budget`) and 3 consecutive failures on an unchanged revision now halt automatic polling retries until the conversation changes or the user triggers a manual force refresh;
+  - Updated [background-worker.mjs](sidecars/panel/background-worker.mjs) to restart cleanly when a conversation grows mid-acquisition (`steps > expected`, up to 3 revisions) and report `code: 'budget-exceeded'` accurately on budget failures;
+  - Added localized `collectionBackgroundHalted` copy in [i18n.cjs](compat/i18n.cjs) and [inline-widget.cjs](compat/inline-widget.cjs) so paused states no longer claim background collection will retry automatically.
+- **Configurable Foreground Collection Budget (`8`–`64 MiB`)**: Kept the safe `8 MiB` default while allowing optional tuning via `settings.json` (`collectionBudgetMb`) or `ANTIGRAVITY_CONTEXT_BUDGET_MB` in [client.mjs](sidecars/panel/client.mjs) and [main.mjs](sidecars/panel/main.mjs).
+- **Antigravity `2.33.0+` Compatibility & Launch Flag Docs (#2)**: Updated [README.md](README.md) and [README.en.md](README.en.md) with `2.33.0+` `--remote-debugging-port=0` launch instructions (Windows / macOS / Linux), `2.34.0+` credential notes, and `collectionBudgetMb` configuration.
 
 ---
 

@@ -186,3 +186,15 @@ test('env port disambiguates multiple standalone instances without generation mi
  });
  assert.deepEqual(await client.discover(),{port:5002,csrf:'tok-2',pid:102});
 });
+
+test('AntigravityClient clamps configurable collection budget between 8 MiB and 64 MiB',()=>{
+ const client=new AntigravityClient({budgetBytes:2*1024*1024});
+ assert.equal(client.budgetBytes,8*1024*1024);
+ assert.equal(client.reader.budgetBytes,8*1024*1024);
+ client.setBudgetBytes(24*1024*1024);
+ assert.equal(client.budgetBytes,24*1024*1024);
+ assert.equal(client.reader.budgetBytes,24*1024*1024);
+ client.setBudgetBytes(256*1024*1024);
+ assert.equal(client.budgetBytes,64*1024*1024);
+ assert.equal(client.reader.budgetBytes,64*1024*1024);
+});

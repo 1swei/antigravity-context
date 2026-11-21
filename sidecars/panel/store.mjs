@@ -128,8 +128,8 @@ export class MetricsStore {
     entry.data={...reconcileMetrics(entry.data,fresh,entry.savedAt||null),...(previousTask?{previousTaskUsage:previousTask}:{}),conversationId:id};entry.collection=null;entry.backgroundRevision=revision;entry.backgroundCheckedAt=Date.now();entry.backgroundCompletedAt=Date.now();entry.backgroundReady=true;entry.updatedAt=Date.now();entry.lastSuccessAt=new Date().toISOString();
     try{const saved=await this.history.save(scope,id,entry.data,{isCurrent:current});if(saved&&current())entry.savedAt=saved.savedAt;}catch{if(current())this.persistenceError='统计暂时无法保存到本地';}
   }
-  startBackground(scope,id,entry,current){
-    const started=this.background?.request(scope,id,this.client.server||this.client.reader?.endpoint,{summary:this.client.reader?.summaries?.[id],isCurrent:current});
+  startBackground(scope,id,entry,current,{force=false}={}){
+    const started=this.background?.request(scope,id,this.client.server||this.client.reader?.endpoint,{summary:this.client.reader?.summaries?.[id],force,isCurrent:current});
     if(started){entry.backgroundOnly=true;entry.backgroundReady=false;}
     return started;
   }
@@ -153,6 +153,7 @@ export class MetricsStore {
       if(entry.backgroundOnly&&this.background){
         const state=this.background.state(id);
         if(state?.state==='processing')return entry.data||null;
+        if(state?.state==='limited'&&!force&&state.retryable===false)return entry.data||null;
         if(entry.backgroundReady){
           // Host summaries can stay unchanged while final token/timing metadata
           // arrives. Revalidate slowly, with a shorter manual cooldown, rather
@@ -164,7 +165,7 @@ export class MetricsStore {
           entry.backgroundCheckedAt=Date.now();const revision=JSON.stringify([summary.stepCount??null,summary.lastModifiedTime??null,summary.status??null,summary.lastUserInputStepIndex??null]);
           if(revision===entry.backgroundRevision&&age<(force?BACKGROUND_MANUAL_COOLDOWN_MS:BACKGROUND_RECHECK_MS))return entry.data;
         }
-        this.startBackground(scope,id,entry,current);return entry.data||null;
+        this.startBackground(scope,id,entry,current,{force});return entry.data||null;
       }
       const raw = await this.client.trajectory(id,{force,isCurrent:current});
       if (!current()) throw new Error('后台已重新连接，请等待刷新');
@@ -223,16 +224,16 @@ export class MetricsStore {
       if (selected) {
         try { speed = await this.session(selected, force); }
         catch (e) { sessionError = e.message; }
-        const entry=this.sessions.get(selected.toLowerCase());
-        if(entry?.collection||this.background?.state(selected.toLowerCase()))collection={...entry?.collection,...this.background?.state(selected.toLowerCase()),freshness:usableMetrics(speed)?'saved':'unavailable',lastSuccessAt:entry.lastSuccessAt||null};
+        const entry=this.sessions.get(selected.toLowerCase()),bg=this.background?.state(selected.toLowerCase());
+        if(entry?.collection||bg)collection={...entry?.collection,...bg,freshness:usableMetrics(speed)?'saved':'unavailable',lastSuccessAt:entry?.lastSuccessAt||null};
       }
     } catch (e) {
       connection = this.quota ? 'stale' : 'offline'; error = e.message;
       if (conversationId) speed = await this.cachedSession(conversationId);
     }
     if(!collection&&conversationId){
-      const entry=this.sessions.get(conversationId.toLowerCase());
-      if(entry?.collection||this.background?.state(conversationId.toLowerCase()))collection={...entry?.collection,...this.background?.state(conversationId.toLowerCase()),freshness:usableMetrics(speed)?'saved':'unavailable',lastSuccessAt:entry.lastSuccessAt||null};
+      const entry=this.sessions.get(conversationId.toLowerCase()),bg=this.background?.state(conversationId.toLowerCase());
+      if(entry?.collection||bg)collection={...entry?.collection,...bg,freshness:usableMetrics(speed)?'saved':'unavailable',lastSuccessAt:entry?.lastSuccessAt||null};
     }
     return {
       connection, error, sessionError, collection, serverTime: new Date().toISOString(),

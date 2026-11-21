@@ -9,6 +9,8 @@ import { TrajectoryReader } from './trajectory-reader.mjs';
 const SERVICE = '/exa.language_server_pb.LanguageServerService/';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 const CLI_CSRF_RE = /--csrf_token(?:=|\s+)"?([^\s"]+)/;
+const DEFAULT_BUDGET_BYTES = 8 * 1024 * 1024;
+const clampBudgetBytes = n => Number.isFinite(n) && n > 0 ? Math.min(64 * 1024 * 1024, Math.max(DEFAULT_BUDGET_BYTES, Math.round(n))) : DEFAULT_BUDGET_BYTES;
 
 export function serverFromEnv(env = process.env) {
   const rawAddr = env?.ANTIGRAVITY_LS_ADDRESS;
@@ -57,11 +59,12 @@ function serverFromPorts(logPorts, processes, envServer = null) {
 }
 export function serverFromDiscovery(log, processes, env = null) { return serverFromPorts(httpLogPorts(log),processes,env ? serverFromEnv(env) : null); }
 export class AntigravityClient {
-  constructor({paths=platformPaths,readLog=readFile,logStat=stat,processes=discoverProcesses,env=undefined,now=Date.now,onRpc=null}={}) {
+  constructor({paths=platformPaths,readLog=readFile,logStat=stat,processes=discoverProcesses,env=undefined,now=Date.now,onRpc=null,budgetBytes=DEFAULT_BUDGET_BYTES}={}) {
     this.paths=paths;this.readLog=readLog;this.logStat=logStat;this.processes=processes;
     this.env=env??(processes===discoverProcesses&&readLog===readFile?process.env:{});
-    this.now=now;this.onRpc=onRpc;this.reader=new TrajectoryReader(this);
+    this.now=now;this.onRpc=onRpc;this.budgetBytes=clampBudgetBytes(budgetBytes);this.reader=new TrajectoryReader(this,{budgetBytes:this.budgetBytes});
   }
+  setBudgetBytes(bytes){const next=clampBudgetBytes(bytes);this.budgetBytes=next;if(this.reader)this.reader.budgetBytes=next;}
   server = null;
   discoveredAt = 0;
   discovering = null;
@@ -162,7 +165,7 @@ export class AntigravityClient {
         // the shared agent where an immediate quota refresh could reuse it.
         const req = request({ hostname: server.host || '127.0.0.1', port: server.port, method: 'POST', path: SERVICE + method, ...(projection?{agent:false}:{}),
           headers: { 'Content-Type': 'application/json', 'Connect-Protocol-Version': '1', 'x-codeium-csrf-token': server.csrf, 'Content-Length': Buffer.byteLength(data) } }, res => {
-          const projected=projection?new TrajectoryJson():null;
+          const projected=projection?new TrajectoryJson({maxRetainedBytes:this.budgetBytes}):null;
           let text = '',bytes=0,failed=false;
           // Parsing can fail after the request has finished sending. Destroying
           // that request does not always emit another request error, and the
@@ -223,7 +226,7 @@ export class AntigravityClient {
     assertCurrent();const server=await this.discover();assertCurrent();
     const input=JSON.stringify(method==='GetCascadeTrajectoryGeneratorMetadata'?{...body,includeMessages:false}:body);
     let pending=null;
-    const parser=new TrajectoryJson({onRecord:(kind,index,value)=>{if(pending)throw Error('Statistics stream consumer overflow');pending={kind,index,value};}});
+    const parser=new TrajectoryJson({maxRetainedBytes:this.budgetBytes,onRecord:(kind,index,value)=>{if(pending)throw Error('Statistics stream consumer overflow');pending={kind,index,value};}});
     const started=this.now();let bytes=0,peakRetained=0,req,res,deadline,watch;
     const timeout=()=>Error('Antigravity 本地接口超时');
     const abort=error=>{streamError||=error;rejectAbort(streamError);res?.destroy();req?.destroy(streamError);};

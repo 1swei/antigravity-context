@@ -770,7 +770,7 @@ module.exports = function installAgPulseInlineWidget() {
       hidden(notice,!collectionActive);if(!collectionActive){notice.querySelector('details').open=false;continue;}
       const set=(selector,value)=>{const element=notice.querySelector(selector);if(element.textContent!==value)element.textContent=value;};
       set('.collection-state',collection.freshness==='saved'&&Number.isFinite(Date.parse(collection.lastSuccessAt))?t('collectionSavedAt',{time:date(collection.lastSuccessAt)}):t(collection.freshness==='saved'?'collectionSaved':'collectionLimited'));
-      set('[data-i18n="collectionReason"]',t(processing?'collectionProcessingReason':collection.reason?'collectionBackgroundFailed':'collectionReason'));
+      set('[data-i18n="collectionReason"]',t(processing?'collectionProcessingReason':collection.reason?(collection.retryable===false?'collectionBackgroundHalted':'collectionBackgroundFailed'):'collectionReason'));
       set('summary',t(processing?'collectionProgress':'collectionDetails'));
       hidden(notice.querySelector('[data-i18n="collectionNoPartial"]'),processing);
       hidden(notice.querySelector('a'),processing);

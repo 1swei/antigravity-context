@@ -67,7 +67,12 @@ try{
    // page limit bounds this set; distinct phases have independent namespaces.
    if(count&&identified){if(fingerprints.has(fingerprint))throw Error('Repeated background page');fingerprints.add(fingerprint);}
    if(isStep){
-    const expected=Number(s.stepCount);if(Number.isSafeInteger(expected)&&expected>=0&&steps>expected)throw Error('Conversation changed during acquisition');
+    const expected=Number(s.stepCount);
+    if(Number.isSafeInteger(expected)&&expected>=0&&steps>expected){
+     if(++revisions>3)throw Error('Conversation keeps changing');
+     view=await summary();s=view.conversation;store.truncate('steps',0);store.truncate('generators',0);steps=generators=0;fingerprints.clear();
+     cp={schema:1,mark:mark(s),relations:view.relations,steps:0,generators:0,phase:'steps'};await save(cp);await sleep(1000);continue;
+    }
     if(!count&&Number.isSafeInteger(expected)&&expected>steps)throw Error('Incomplete background steps');
     cp.steps=steps;if(!count||Number.isSafeInteger(expected)&&steps===expected)cp.phase='generators';
    }else{cp.generators=generators;if(!count)cp.phase='reducing';}
@@ -91,5 +96,5 @@ try{
   store.close();store=null;phase='publishing';progress(true);
   parentPort.postMessage({type:'complete',result,revision:cp.mark,relations:final.relations});break;
  }
-}catch(error){parentPort.postMessage({type:'failed',collection:collectionFailure(error),code:!current()?'cancelled':error.code==='ERR_UNKNOWN_BUILTIN_MODULE'?'unsupported-runtime':error.code==='SQLITE_FULL'||error.errcode===13||error.code==='ENOSPC'?'disk-budget':'background-unavailable'});}
+}catch(error){const budget=collectionFailure(error);parentPort.postMessage({type:'failed',collection:budget,code:!current()?'cancelled':budget?'budget-exceeded':error.code==='ERR_UNKNOWN_BUILTIN_MODULE'?'unsupported-runtime':error.code==='SQLITE_FULL'||error.errcode===13||error.code==='ENOSPC'?'disk-budget':'background-unavailable'});}
 finally{try{store?.close();}catch{}parentPort.close();}

@@ -3,8 +3,19 @@
 **简体中文** · [English](CHANGELOG.en.md)
 
 - **插件标识**：`antigravity-context`（展示名：`Antigravity Context`）
-- **当前版本**：`1.0.11`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
+- **当前版本**：`1.0.12`（基于原 `antigrative-dashboard` / `antigravity-pulse` `0.8.20` 开源分支二次开发）
 - **更新时间**：`2026-11-21`
+
+---
+
+## v1.0.12（`2026-11-21`）
+
+- **修复超长会话触发 `8 MiB` 保留上限后的后台无限重试死循环（#1）**：
+  - [background-statistics.mjs](sidecars/panel/background-statistics.mjs) 与 [store.mjs](sidecars/panel/store.mjs) 保留后台采集返回的 `collection` 诊断信息并区分 `retryable` 状态：对永久性/确定性失败（`budget-exceeded`、`unsupported-runtime`、`disk-budget`）或同一会话 revision 连续失败 3 次后自动熔断停止轮询重试，仅在会话内容变化或用户手动强制刷新时重试；
+  - [background-worker.mjs](sidecars/panel/background-worker.mjs) 在后台采集中途遇到会话步骤增长（`steps > expected`）时改为按 revision 变更重启采集（最多 3 次），捕获预算错误时准确上报 `code: 'budget-exceeded'`；
+  - [i18n.cjs](compat/i18n.cjs) 与 [inline-widget.cjs](compat/inline-widget.cjs) 新增三语 `collectionBackgroundHalted` 提示文案，停止自动重试时明确告知用户可尝试手动刷新，不再误导提示「稍后会自动重试」。
+- **支持可配置前台统计预算（`8`–`64 MiB`）**：[client.mjs](sidecars/panel/client.mjs) 与 [main.mjs](sidecars/panel/main.mjs) 默认维持安全稳健的 `8 MiB` 上限，同时支持在 `settings.json` 配置 `collectionBudgetMb` 或通过环境变量 `ANTIGRAVITY_CONTEXT_BUDGET_MB` 按需调大（安全限幅 `8`–`64 MiB`）。
+- **完善 Antigravity `2.33.0+` 兼容性与启动参数文档（#2）**：更新 [README.md](README.md) 与 [README.en.md](README.en.md)，明确 `v1.0.11+` 的 `2.34.0+` 凭据适配说明、Antigravity `2.33.0+` 必须附加 `--remote-debugging-port=0` 启动参数（Windows / macOS / Linux 示例）以及预算配置说明。
 
 ---
 

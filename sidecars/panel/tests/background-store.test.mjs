@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {MetricsStore} from '../store.mjs';
+import {BackgroundStatistics} from '../background-statistics.mjs';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {EventEmitter} from 'node:events';
 import {budgetError} from '../collection-state.mjs';
 import {trajectoryMetrics} from '../metrics.mjs';
 import {aggregateTaskUsage} from '../task-usage.mjs';
@@ -49,4 +54,62 @@ test('large parent shows current root only while retaining previous task aggrega
  await store.acceptBackground(job.scope,id,{metrics:current,delegatedIds:[other],delegatedTruncated:false},{database:'fixture.sqlite',revision,isCurrent:job.options.isCurrent});
  const data=entry.data;assert.equal(data.taskUsage.state,'partial');assert.equal(data.taskUsage.loadedSubagents,0);assert.equal(data.taskUsage.tokens.totalTokens,current.tokens.totalTokens);assert.equal(data.taskUsage.cache.hitRate,current.cache.hitRate);
  assert.notEqual(data.taskUsage.tokens.totalTokens,oldTask.tokens.totalTokens);assert.deepEqual(safeMetrics(data,id).previousTaskUsage,oldTask);
+});
+
+test('non-retryable background failure halts automatic polling retries until manual force refresh',async t=>{
+ const {state,store}=setup(t);await store.snapshot({conversationId:id});
+ store.background.state=()=>({state:'limited',code:'budget-exceeded',reason:'background-unavailable',retryable:false});
+ const before=state.requests;
+ for(let i=0;i<3;i++){const snap=await store.snapshot({conversationId:id});assert.equal(snap.collection.retryable,false);assert.equal(snap.collection.reason,'background-unavailable');}
+ assert.equal(state.requests,before,'Halted background failure must not re-request on ordinary polls');
+ await store.snapshot({conversationId:id,force:true});
+ assert.equal(state.requests,before+1,'Manual refresh may still request a retry');
+});
+
+test('BackgroundStatistics stops auto-retrying permanent budget failures and caps transient retries',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'bg-retry-test-'));
+ t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ let now=1000000,launches=0,nextMessage=null,settled=null;
+ const scope='a'.repeat(64),endpoint={port:1234,csrf:'tok'};
+ const bg=new BackgroundStatistics({
+  directory:dir,now:()=>now,onComplete:()=>{},
+  workerFactory:()=>{
+   launches++;
+   const w=new EventEmitter();
+   w.terminate=async()=>{settled?.();};
+   queueMicrotask(()=>{w.emit('message',nextMessage);w.emit('exit',1);});
+   return w;
+  },
+ });
+ t.after(()=>bg.dispose());
+ const runAndWait=async options=>{
+  let done;const wait=new Promise(r=>{done=r;});settled=done;
+  assert.equal(bg.request(scope,id,endpoint,options),true);
+  await wait;
+  while(bg.active)await new Promise(r=>setTimeout(r,5));
+ };
+ // 1. Permanent budget-exceeded failure halts immediately and preserves collection details
+ nextMessage={type:'failed',code:'budget-exceeded',collection:{code:'budget-exceeded',kind:'retained-fields',unit:'bytes',observed:9000000,observedBytes:9000000,limit:8388608,limitBytes:8388608,complete:false}};
+ await runAndWait({summary});
+ const s1=bg.state(id);
+ assert.equal(s1.retryable,false);assert.equal(s1.kind,'retained-fields');assert.equal(s1.observedBytes,9000000);
+ now+=3600*1000;
+ assert.equal(bg.request(scope,id,endpoint,{summary}),false,'Same revision must not auto-retry permanent budget failure');
+ assert.equal(launches,1);
+ await runAndWait({summary,force:true});
+ assert.equal(launches,2);
+
+ // 2. Transient failures halt after 3 consecutive attempts on the same revision
+ bg.jobs.clear();launches=0;
+ nextMessage={type:'failed',code:'background-unavailable'};
+ for(let attempt=1;attempt<=3;attempt++){
+  await runAndWait({summary});
+  const st=bg.state(id);
+  assert.equal(st.retryable,attempt<3);
+  now+=3600*1000;
+ }
+ assert.equal(launches,3);
+ assert.equal(bg.request(scope,id,endpoint,{summary}),false,'Auto-retry stops after 3 transient failures on unchanged revision');
+ await runAndWait({summary:{...summary,stepCount:10}});
+ assert.equal(launches,4);
 });

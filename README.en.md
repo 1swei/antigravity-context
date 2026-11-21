@@ -8,7 +8,7 @@
 
 A lightweight, local-first Antigravity plugin that injects an inline context window & telemetry bar into the chat composer and provides an interactive Token usage analytics modal.
 
-[MIT License](LICENSE) · Version `v1.0.11` · [Changelog](CHANGELOG.en.md)
+[MIT License](LICENSE) · Version `v1.0.12` · [Changelog](CHANGELOG.en.md)
 
 </div>
 
@@ -85,6 +85,17 @@ git clone https://github.com/1swei/antigravity-context.git "$env:USERPROFILE\.ge
 ```
 
 Then enable **Antigravity Context** in Antigravity's Plugin Manager (or reload the window).
+
+---
+
+## Compatibility & Configuration (Antigravity 2.33.0+)
+
+- **Antigravity 2.34.0+ Credentials**: Make sure the plugin is updated to **`v1.0.11+`**, which supports host-injected `ANTIGRAVITY_LS_ADDRESS` / `ANTIGRAVITY_CSRF_TOKEN` environment credentials.
+- **Antigravity 2.33.0+ Launch Flag**: Starting with Antigravity `2.33.0`, `--remote-debugging-port` is disabled by default and `DevToolsActivePort` is actively removed. Because this plugin injects the inline composer bar over local CDP without a side pane, launch Antigravity with `--remote-debugging-port=0`:
+  - **Windows**: Append `--remote-debugging-port=0` to the desktop shortcut Target (fully quit Antigravity first, then relaunch via the shortcut).
+  - **macOS**: `open -a Antigravity --args --remote-debugging-port=0`
+  - **Linux**: `antigravity --remote-debugging-port=0`
+- **Long Conversation Budget (Optional)**: The default foreground retained-field budget is `8 MiB` (oversized sessions automatically fall back to background SQLite streaming). You can raise this limit (`8`–`64` MiB) by setting `"collectionBudgetMb": 16` in `settings.json` under the plugin data directory or via `ANTIGRAVITY_CONTEXT_BUDGET_MB`.
 
 ---
 

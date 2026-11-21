@@ -61,6 +61,8 @@ const runtimeSettings = () => {
   let settings = {};
   try { settings = JSON.parse(readFileSync(paths.settings,'utf8').replace(/^\uFEFF/,'')); } catch {}
   try { if (JSON.parse(readFileSync(paths.pluginConfig,'utf8').replace(/^\uFEFF/,'')).plugins?.['antigravity-context']?.enabled === false) settings.enabled = false; } catch {}
+  const budgetMb = Number(settings.collectionBudgetMb ?? process.env.ANTIGRAVITY_CONTEXT_BUDGET_MB);
+  store.client?.setBudgetBytes?.(Number.isFinite(budgetMb) && budgetMb > 0 ? budgetMb * 1024 * 1024 : 8 * 1024 * 1024);
   settingsCache=settings;settingsAt=Date.now();return settings;
 };
 const integration = new RuntimeUi({

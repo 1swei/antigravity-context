@@ -3,16 +3,34 @@ import {Worker} from 'node:worker_threads';
 import {mkdir,mkdtemp,rm,lstat,readdir} from 'node:fs/promises';
 import {join,resolve,dirname,basename} from 'node:path';
 const GUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,HASH=/^[a-f0-9]{64}$/;
+const PERMANENT_REASONS=new Set(['unsupported-runtime','disk-budget','budget-exceeded']),MAX_AUTO_RETRIES=3;
+const summaryRevision=s=>s?JSON.stringify([s.stepCount??null,s.lastModifiedTime??null,s.status??null,s.lastUserInputStepIndex??null]):null;
 export class BackgroundStatistics {
  constructor({directory,onComplete,owns=()=>true,workerFactory=(data)=>new Worker(new URL('./background-worker.mjs',import.meta.url),{workerData:data,resourceLimits:{maxOldGenerationSizeMb:96,maxYoungGenerationSizeMb:8,stackSizeMb:4}}),now=Date.now}={}){
   Object.assign(this,{directory:resolve(directory),onComplete,owns,workerFactory,now});this.jobs=new Map();this.active=null;this.epoch=0;this.disposed=false;
  }
- state(id){const j=this.jobs.get(id);return j?.state==='processing'?{state:'processing',code:'background-collection',stage:j.stage,processedSteps:j.steps,processedGenerators:j.generators}:j?.state==='failed'?{state:'limited',code:'budget-exceeded',reason:j.reason}:null;}
- request(scope,id,endpoint,{summary,isCurrent=()=>true}={}){
+ state(id){
+  const j=this.jobs.get(id);
+  if(j?.state==='processing')return {state:'processing',code:'background-collection',stage:j.stage,processedSteps:j.steps,processedGenerators:j.generators};
+  if(j?.state==='failed')return {...(j.collection||{}),state:'limited',code:'budget-exceeded',reason:j.reason,retryable:j.retryable!==false,retryAt:Number.isFinite(j.retryAt)?new Date(j.retryAt).toISOString():null};
+  return null;
+ }
+ request(scope,id,endpoint,{summary,force=false,isCurrent=()=>true}={}){
   if(this.disposed||!this.owns()||!HASH.test(scope)||!GUID.test(id)||!endpoint?.csrf||!Number.isInteger(endpoint.port))return false;
-  const old=this.jobs.get(id);if(old&&old.scope===scope){if(old.state==='processing')return true;if(old.state==='failed'&&old.retryAt>this.now())return false;this.jobs.delete(id);}
+  const old=this.jobs.get(id),revision=summaryRevision(summary);let attempts=0;
+  if(old&&old.scope===scope){
+   if(old.state==='processing')return true;
+   if(old.state==='failed'){
+    if(!force){
+     if(!old.retryable&&(!revision||revision===old.revision))return false;
+     if(old.retryable&&old.retryAt>this.now())return false;
+     if(!revision||revision===old.revision)attempts=old.attempts||0;
+    }else if((old.failedAt||0)+10000>this.now())return false;
+   }
+   this.jobs.delete(id);
+  }
   while(this.jobs.size>=8){const key=[...this.jobs].find(([,j])=>j!==this.active&&j.state!=='processing')?.[0];if(!key)return false;this.jobs.delete(key);}
-  this.jobs.set(id,{id,scope,endpoint,summary,isCurrent,state:'processing',stage:'queued',steps:0,generators:0});void this.pump();return true;
+  this.jobs.set(id,{id,scope,endpoint,summary,revision,attempts,isCurrent,state:'processing',stage:'queued',steps:0,generators:0});void this.pump();return true;
  }
  async pump(){
   if(this.active||this.disposed||!this.owns())return;
@@ -23,7 +41,12 @@ export class BackgroundStatistics {
   // usage. A watchdog or worker failure can occur after 'complete' is sent.
   const current=()=>scopeCurrent()&&(!job.cancel||Atomics.load(new Int32Array(job.cancel),0)===0);
   let directory,worker,watchdog;
-  const fail=reason=>{job.state='failed';job.reason=reason;job.retryAt=this.now()+300000;};
+  const fail=(reason,collection=null)=>{
+   job.state='failed';job.reason=reason;job.collection=collection||null;job.failedAt=this.now();
+   const attempts=(job.attempts||0)+1;job.attempts=attempts;
+   const permanent=PERMANENT_REASONS.has(reason)||collection?.code==='budget-exceeded'||attempts>=MAX_AUTO_RETRIES;
+   job.retryable=!permanent;job.retryAt=permanent?Infinity:this.now()+Math.min(300000,30000*2**(attempts-1));
+  };
   try{
    await mkdir(this.directory,{recursive:true,mode:0o700});if((await lstat(this.directory)).isSymbolicLink())throw Error('Unsafe scratch directory');
    // Abrupt exits may leave scratch files. Count, do not silently delete,
@@ -55,7 +78,7 @@ export class BackgroundStatistics {
     worker.on('message',message=>{
      if(!current())return;
      if(message.type==='progress'){job.stage=message.stage;job.steps=message.processedSteps;job.generators=message.processedGenerators;}
-     if(message.type==='failed'){fail(message.code);finish(Object.assign(Error('Background worker failed'),{code:message.code}));}
+     if(message.type==='failed'){fail(message.code,message.collection||null);finish(Object.assign(Error('Background worker failed'),{code:message.code}));}
      if(message.type==='complete'){
       completed=true;job.stage='publishing';
       Promise.resolve().then(()=>current()?this.onComplete(job.scope,job.id,message.result,{database:join(directory,'statistics.sqlite'),revision:message.revision,isCurrent:current}):undefined).then(()=>{if(current())job.state='ready';finish();},finish);

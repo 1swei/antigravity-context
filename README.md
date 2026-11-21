@@ -8,7 +8,7 @@
 
 轻量、本地优先的 Antigravity 插件：在对话输入框内直接展示实时上下文占用、分段构成、生成速度、缓存命中率，并提供交互式 Token 用量统计弹窗。
 
-[MIT License](LICENSE) · 版本 `v1.0.11` · [更新日志](CHANGELOG.md)
+[MIT License](LICENSE) · 版本 `v1.0.12` · [更新日志](CHANGELOG.md)
 
 </div>
 
@@ -85,6 +85,17 @@ git clone https://github.com/1swei/antigravity-context.git "$env:USERPROFILE\.ge
 ```
 
 克隆完成后，在 Antigravity 插件管理中启用 **Antigravity Context**（或重新加载窗口）即可生效。
+
+---
+
+## Antigravity 2.33.0+ 兼容性与配置说明
+
+- **Antigravity 2.34.0+ 凭据适配**：请确保已更新至本插件 **`v1.0.11+`**（已适配宿主注入的 `ANTIGRAVITY_LS_ADDRESS` / `ANTIGRAVITY_CSRF_TOKEN` 环境变量凭据）。
+- **Antigravity 2.33.0+ 启动参数要求**：Antigravity 自 `2.33.0` 起默认关闭了 `--remote-debugging-port` 并会清理 `DevToolsActivePort`，导致无头内联注入插件无法挂载到对话输入框。如需正常使用内联状态栏，请在启动 Antigravity 时附加 `--remote-debugging-port=0` 参数：
+  - **Windows**：在桌面快捷方式「目标」末尾追加 `--remote-debugging-port=0`（需完全退出 Antigravity 后通过该快捷方式重新启动）。
+  - **macOS**：`open -a Antigravity --args --remote-debugging-port=0`
+  - **Linux**：`antigravity --remote-debugging-port=0`
+- **超长会话统计预算配置（可选）**：默认单次前台采集保留上限为 `8 MiB`（超限后自动转入后台 SQLite 分片统计）。如需调大前台预算，可在 `%LOCALAPPDATA%\AntigravityPulse\settings.json`（或对应系统数据目录）中添加 `"collectionBudgetMb": 16`（支持 `8`–`64` MiB），或设置环境变量 `ANTIGRAVITY_CONTEXT_BUDGET_MB`。
 
 ---
 

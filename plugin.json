@@ -3,7 +3,7 @@
   "displayName": "Antigravity Context",
   "display_name": "Antigravity Context",
   "description": "Inline context window breakdown, token throughput, cache hit rate and usage analytics on Windows, Linux and macOS. English / Chinese switching.",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "logo": "assets/logo.svg",
   "author": {
     "name": "1swei",
